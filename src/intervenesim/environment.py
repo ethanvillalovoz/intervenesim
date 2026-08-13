@@ -56,7 +56,12 @@ class PickPlaceEnv:
         "joint_vel_6",
     )
 
-    def __init__(self, max_steps: int = 260, render: bool = False) -> None:
+    def __init__(
+        self,
+        max_steps: int = 260,
+        render: bool = False,
+        offscreen: bool = False,
+    ) -> None:
         # Delay imports so dataset/model unit tests do not require a simulator context.
         with contextlib.redirect_stderr(io.StringIO()):
             import robosuite as suite
@@ -73,7 +78,7 @@ class PickPlaceEnv:
             robots="Panda",
             controller_configs=controller,
             has_renderer=render,
-            has_offscreen_renderer=False,
+            has_offscreen_renderer=offscreen,
             use_camera_obs=False,
             use_object_obs=True,
             reward_shaping=True,
@@ -83,6 +88,7 @@ class PickPlaceEnv:
             ignore_done=False,
         )
         self.max_steps = max_steps
+        self._offscreen = offscreen
         self._step = 0
         self._last_raw: dict[str, Any] | None = None
         self._rng = np.random.default_rng(0)
@@ -175,6 +181,22 @@ class PickPlaceEnv:
     def render(self) -> None:
         with contextlib.suppress(Exception):
             self._env.render()
+
+    def capture_frame(
+        self,
+        width: int = 320,
+        height: int = 240,
+        camera: str = "frontview",
+    ) -> np.ndarray:
+        """Render an RGB frame without requiring an on-screen window."""
+        if not self._offscreen:
+            raise RuntimeError("create PickPlaceEnv with offscreen=True to capture frames")
+        frame = np.asarray(
+            self._env.sim.render(camera_name=camera, width=width, height=height),
+            dtype=np.uint8,
+        )
+        # MuJoCo's offscreen framebuffer has an OpenGL bottom-left origin.
+        return np.flipud(frame).copy()
 
     def close(self) -> None:
         self._env.close()

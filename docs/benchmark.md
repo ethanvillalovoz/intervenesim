@@ -73,7 +73,8 @@ policies do not receive the intervention flag or expert phase.
 - Recovery success rate after a disturbance fires
 - Mean completion steps among successful episodes
 - Autonomous success per 1,000 additional labeled actions
-- Bootstrap 95% confidence intervals for success rates
+- Wilson 95% confidence intervals for per-condition success rates
+- Exact paired McNemar test over seed-matched disturbed episodes
 
 ## Reproducibility
 

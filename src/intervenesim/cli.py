@@ -13,6 +13,7 @@ from intervenesim.benchmark import run_benchmark
 from intervenesim.config import BenchmarkConfig
 from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
+from intervenesim.video import record_benchmark_comparison
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -76,6 +77,19 @@ def smoke(
     manifest = run_benchmark(config, output_dir=output, progress=_progress)
     report = manifest["artifacts"]["report"]
     console.print(f"[bold green]Smoke test complete[/bold green]: {report}")
+
+
+@app.command("record-comparison")
+def record_comparison(
+    run: Annotated[Path, typer.Option(exists=True, file_okay=False)] = Path(
+        "artifacts/runs/benchmark-v1"
+    ),
+    output: Annotated[Path, typer.Option()] = Path("artifacts/videos/comparison.mp4"),
+    disturbance: Annotated[str, typer.Option()] = "gripper_slip",
+) -> None:
+    """Record a matched baseline-failure / recovery-success benchmark episode."""
+    result = record_benchmark_comparison(run, output, disturbance)
+    console.print_json(json.dumps(result))
 
 
 def _progress(message: str) -> None:
