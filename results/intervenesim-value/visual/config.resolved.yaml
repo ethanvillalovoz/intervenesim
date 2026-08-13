@@ -1,0 +1,31 @@
+seed: 117
+train_policy_seed: 27
+eval_policy_seed: 327
+tasks:
+- can
+- milk
+- bread
+- cereal
+disturbances:
+- nominal
+- object_shift
+- action_noise
+- action_delay
+- gripper_slip
+candidate_steps:
+- 10
+- 30
+- 50
+- 70
+- 90
+- 110
+- 130
+cameras:
+- frontview
+- agentview
+episodes_per_task: 2
+epochs: 30
+max_steps: 260
+device: auto
+research_run: artifacts/runs/research-v1
+output_dir: artifacts/runs/visual-v1

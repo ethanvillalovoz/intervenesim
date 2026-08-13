@@ -1,0 +1,26 @@
+{
+  "risk_gate": {
+    "auroc": 0.7060324150699918,
+    "average_precision": 0.6168101952451978,
+    "brier": 0.33281296969292407,
+    "positive_rate": 0.16479894528675015,
+    "precision": 0.64,
+    "recall": 0.23255813953488372
+  },
+  "uncertainty_gate": {
+    "auroc": 0.703255182764328,
+    "average_precision": 0.6428695952710742,
+    "brier": 0.43397416181703635,
+    "positive_rate": 0.0,
+    "precision": 0.0,
+    "recall": 0.0
+  },
+  "value_gate": {
+    "auroc": 0.8171725530900216,
+    "average_precision": 0.7525444123437838,
+    "brier": 0.18023538918592308,
+    "positive_rate": 0.4943968358602505,
+    "precision": 0.6786666666666666,
+    "recall": 0.7398255813953488
+  }
+}

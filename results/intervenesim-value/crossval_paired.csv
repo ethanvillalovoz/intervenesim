@@ -1,0 +1,5 @@
+budget,challenger,reference,policy_seeds,mean_delta,std_delta,positive_seeds
+0.25,value_gate,risk_gate,5,0.08083333333333335,0.042245972852121914,5
+0.25,value_gate,uncertainty_gate,5,0.040000000000000015,0.04275657844121765,4
+0.5,value_gate,risk_gate,5,0.14666666666666667,0.03095695936834455,5
+0.5,value_gate,uncertainty_gate,5,0.07916666666666668,0.02763853991962833,5
