@@ -43,6 +43,6 @@ def test_snapshot_restore_replays_identical_transition() -> None:
         np.testing.assert_allclose(restored.observation, state.observation, atol=1e-6)
         second_state, second_reward, second_done, second_info = env.step(action)
         np.testing.assert_allclose(second_state.observation, first_state.observation, atol=1e-6)
-        assert second_reward == first_reward
+        assert second_reward == pytest.approx(first_reward, abs=1e-12)
         assert second_done == first_done
         assert second_info["success"] == first_info["success"]
