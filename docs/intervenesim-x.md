@@ -34,7 +34,8 @@ though the baseline action already agrees with the expert.
 
 ## Learned intervention gate
 
-The recovery collector preserves pre-intervention rollout states. A state receives a
+The recovery collector preserves pre-intervention rollout states from both successful and
+unsuccessful expert-takeover attempts. A state receives a
 positive risk label if the privileged supervisor will intervene within a fixed prediction
 horizon. Earlier states and nominal successful rollouts are negative examples. Training
 uses episode-disjoint validation data, class-balanced binary cross entropy, and a
@@ -70,3 +71,8 @@ All reference experiments must run on Apple Silicon or CPU using free software. 
 project does not claim real-world transfer, safety, equivalence between scripted and human
 corrections, or evidence about large vision-language-action models. Visual experiments,
 when included, are reported separately from the state-based primary result.
+
+The multi-domain observation augments the original 24-D benchmark state with control
+progress, derived lifted/proximity predicates, object geometry, and a task one-hot vector.
+This makes phase-dependent commands identifiable for tall objects while leaving the
+released single-task benchmark and checkpoints backward compatible.

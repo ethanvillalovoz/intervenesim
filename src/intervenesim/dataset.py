@@ -254,7 +254,7 @@ class TrajectoryData:
         )
 
 
-class BehaviorCloningDataset(Dataset[tuple[np.ndarray, np.ndarray, np.ndarray, np.bool_]]):
+class BehaviorCloningDataset(Dataset[tuple[np.ndarray, np.ndarray, np.ndarray, np.bool_, np.int8]]):
     def __init__(self, data: TrajectoryData, indices: np.ndarray | None = None) -> None:
         self.data = data
         self.indices = np.arange(data.sample_count) if indices is None else np.asarray(indices)
@@ -262,13 +262,16 @@ class BehaviorCloningDataset(Dataset[tuple[np.ndarray, np.ndarray, np.ndarray, n
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.bool_]:
+    def __getitem__(
+        self, index: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.bool_, np.int8]:
         row = self.indices[index]
         return (
             self.data.observations[row],
             self.data.actions[row],
             self.data.rejected_actions[row],
             self.data.rejection_mask[row],
+            self.data.phases[row],
         )
 
 

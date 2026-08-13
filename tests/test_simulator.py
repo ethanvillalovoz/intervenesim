@@ -27,4 +27,4 @@ def test_expert_completes_each_object_domain(task: str) -> None:
             if done:
                 break
     assert info["success"]
-    assert len(state.observation) == 31
+    assert len(state.observation) == 35

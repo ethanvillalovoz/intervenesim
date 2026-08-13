@@ -54,7 +54,11 @@ class ScriptedExpert:
                 self._set_phase(Phase.DESCEND)
         elif self.phase is Phase.DESCEND:
             target = can + np.array([0.0, 0.0, state.grasp_offset_z], dtype=np.float32)
-            if np.linalg.norm(target - eef) < 0.014 or self.phase_steps > 55:
+            # A tolerant pre-grasp transition keeps small learned Cartesian residuals from
+            # pinning a policy against tall objects while it waits for an unrealistically
+            # exact pose before closing.
+            tolerance = 0.03 if state.task_name == "milk" else 0.014
+            if np.linalg.norm(target - eef) < tolerance or self.phase_steps > 55:
                 self._set_phase(Phase.CLOSE)
         elif self.phase is Phase.CLOSE:
             if state.can_lifted:

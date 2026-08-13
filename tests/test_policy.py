@@ -3,7 +3,7 @@ import torch
 
 from intervenesim.config import TrainConfig
 from intervenesim.dataset import TrajectoryData
-from intervenesim.policy import PolicyAgent, contrastive_correction_loss, train_policy
+from intervenesim.policy import MLPPolicy, PolicyAgent, contrastive_correction_loss, train_policy
 
 
 def test_policy_fits_small_mapping(tmp_path) -> None:
@@ -84,3 +84,22 @@ def test_contrastive_loss_prefers_correction_over_rejected_action() -> None:
         rejected, correction, rejected, mask, margin=0.2, min_distance=0.1
     )
     assert good < bad
+
+
+def test_multitask_policy_routes_examples_to_separate_heads() -> None:
+    model = MLPPolicy(observation_dim=6, action_dim=1, hidden_dims=(4,), task_head_count=2)
+    assert model.heads is not None
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        model.heads[0][0].bias.fill_(-1.0)
+        model.heads[1][0].bias.fill_(1.0)
+    observations = torch.tensor(
+        [
+            [0.0, 0.0, 0.0, 0.0, 2.0, -1.0],
+            [0.0, 0.0, 0.0, 0.0, -1.0, 2.0],
+        ]
+    )
+    predictions = model(observations).squeeze(-1)
+    assert predictions[0] < 0
+    assert predictions[1] > 0

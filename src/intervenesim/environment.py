@@ -126,6 +126,10 @@ class PickPlaceEnv:
         self.observation_names = self.base_observation_names
         if task_conditioning:
             self.observation_names += (
+                "control_progress",
+                "object_lifted",
+                "near_object",
+                "near_goal",
                 "object_radius",
                 "object_top_extent",
                 "object_bottom_extent",
@@ -202,9 +206,23 @@ class PickPlaceEnv:
         joint_vel = np.asarray(raw["robot0_joint_vel"], dtype=np.float32)
         can_to_eef = eef - can
         can_to_goal = goal - can
+        can_lifted = bool(can[2] > self._rest_object_z + 0.055)
+        near_can = bool(np.linalg.norm(can_to_eef) < 0.075)
+        near_goal = bool(np.linalg.norm(can[:2] - goal[:2]) < 0.075)
         observation_parts = [eef, gripper, can, goal, can_to_eef, can_to_goal, joint_vel]
         if self._task_conditioning:
-            observation_parts.extend([self._object_geometry, self._task_one_hot])
+            task_state_features = np.asarray(
+                [
+                    self._step / self.max_steps,
+                    can_lifted,
+                    near_can,
+                    near_goal,
+                ],
+                dtype=np.float32,
+            )
+            observation_parts.extend(
+                [task_state_features, self._object_geometry, self._task_one_hot]
+            )
         observation = np.concatenate(observation_parts).astype(np.float32)
         place_eef_z = float(goal[2] + self._object_geometry[2] + self._grasp_offset_z)
         return TaskState(
@@ -215,9 +233,9 @@ class PickPlaceEnv:
             gripper_qpos=gripper,
             can_to_eef=can_to_eef,
             can_to_goal=can_to_goal,
-            can_lifted=bool(can[2] > self._rest_object_z + 0.055),
-            near_can=bool(np.linalg.norm(can_to_eef) < 0.075),
-            near_goal=bool(np.linalg.norm(can[:2] - goal[:2]) < 0.075),
+            can_lifted=can_lifted,
+            near_can=near_can,
+            near_goal=near_goal,
             task_name=self.task_name,
             object_geometry=self._object_geometry.copy(),
             place_eef_z=place_eef_z,

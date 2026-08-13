@@ -206,15 +206,15 @@ def collect_recovery_bundle(
                 if done:
                     break
             attempts += 1
+            risk_builder.append_episode(
+                risk_observations,
+                intervention_index,
+                risk_horizon,
+                attempts - 1,
+                disturbance_name,
+            )
             if info["success"] and episode.observations:
                 builder.extend(episode)
-                risk_builder.append_episode(
-                    risk_observations,
-                    intervention_index,
-                    risk_horizon,
-                    successful,
-                    disturbance_name,
-                )
                 successful += 1
                 counts[disturbance_name] += 1
                 if progress:
@@ -238,7 +238,7 @@ def collect_recovery_bundle(
                     observations,
                     intervention_index=None,
                     horizon=risk_horizon,
-                    episode_id=episodes + nominal_successful,
+                    episode_id=attempts + nominal_successful,
                     disturbance="nominal",
                 )
                 nominal_successful += 1
