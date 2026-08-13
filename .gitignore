@@ -1,0 +1,15 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+artifacts/datasets/
+artifacts/checkpoints/
+artifacts/runs/
+artifacts/videos/*.mp4
+artifacts/videos/*.gif
+!artifacts/**/.gitkeep
+
