@@ -63,7 +63,12 @@ class PolicyAgent:
     def action(self, observation: np.ndarray) -> np.ndarray:
         normalized = self.normalizer.transform(np.asarray(observation, dtype=np.float32))
         tensor = torch.from_numpy(normalized).to(self.device).unsqueeze(0)
-        return self.model(tensor).squeeze(0).cpu().numpy().astype(np.float32)
+        action = self.model(tensor).squeeze(0).cpu().numpy().astype(np.float32)
+        # The benchmark's expert controls translation and gripper state. Rotation remains
+        # fixed, so projected zeroes prevent tiny regression residuals from accumulating
+        # into an out-of-distribution wrist orientation during closed-loop rollout.
+        action[3:6] = 0.0
+        return action
 
     @classmethod
     def load(cls, path: str | Path, device: str = "auto") -> PolicyAgent:

@@ -148,7 +148,11 @@ def collect_recovery_demonstrations(
                     )
                 else:
                     action = policy.action(state.observation)
-                executed = disturbance.transform_action(action, step)
+                # The disturbance creates the off-nominal state. Once the privileged
+                # supervisor takes control, execute its correction directly so the
+                # collected label represents recovery from that state rather than the
+                # expert's ability to fight a permanently corrupted control channel.
+                executed = action if intervening else disturbance.transform_action(action, step)
                 state, _, done, info = env.step(executed)
                 if done:
                     break

@@ -57,6 +57,10 @@ The learned baseline begins each disturbed rollout. A simulator-state supervisor
 task progress. It triggers when a configured disturbance fires and the rollout enters an
 off-nominal state, or when task progress stalls beyond a fixed horizon. At that point, a
 scripted expert takes control from the current physical state and attempts to recover.
+The supervisor's corrective command bypasses synthetic action corruption after takeover;
+one-shot physical-state disturbances remain in the scene. This isolates the value of
+labeling recovery states from robust control under a continuously corrupted actuator
+channel.
 
 Only the expert-controlled recovery segment is added to the intervention dataset. The
 supervisor and expert may use privileged simulator state during data collection; learned
@@ -86,4 +90,3 @@ This benchmark evaluates simulated, state-based manipulation. It does not claim 
 transfer, visual robustness, safety certification, or equivalence between scripted and
 human interventions. Its purpose is to test a focused data-efficiency claim in a setting
 that is inexpensive and reproducible.
-
