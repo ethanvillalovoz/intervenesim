@@ -10,10 +10,11 @@ import typer
 from rich.console import Console
 
 from intervenesim.benchmark import run_benchmark
-from intervenesim.config import BenchmarkConfig, ResearchConfig
+from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig
 from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
 from intervenesim.research import run_research
+from intervenesim.value_research import run_value_research
 from intervenesim.video import record_benchmark_comparison, record_research_comparison
 
 app = typer.Typer(
@@ -121,6 +122,19 @@ def research(
     """Run the multi-seed InterveneSim-X research benchmark."""
     resolved = ResearchConfig.from_yaml(config)
     manifest = run_research(resolved, output_dir=output, progress=_progress)
+    console.print(f"[bold green]Complete[/bold green]: {manifest['artifacts']['report']}")
+
+
+@app.command("value-research")
+def value_research(
+    config: Annotated[Path, typer.Option(exists=True, readable=True)] = Path("configs/value.yaml"),
+    output: Annotated[
+        Path | None, typer.Option(help="Override the configured output directory.")
+    ] = None,
+) -> None:
+    """Run the counterfactual value-of-intervention benchmark."""
+    resolved = ValueConfig.from_yaml(config)
+    manifest = run_value_research(resolved, output_dir=output, progress=_progress)
     console.print(f"[bold green]Complete[/bold green]: {manifest['artifacts']['report']}")
 
 

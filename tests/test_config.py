@@ -1,4 +1,4 @@
-from intervenesim.config import BenchmarkConfig, ResearchConfig
+from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig
 
 
 def test_config_loads_sequences_as_tuples() -> None:
@@ -15,3 +15,11 @@ def test_research_config_loads_tasks_and_seeds() -> None:
     assert config.minimum_help_step == 5
     assert config.risk_detection_horizon == 3
     assert config.help_thresholds == (0.9, 0.97)
+
+
+def test_value_config_loads_counterfactual_protocol() -> None:
+    config = ValueConfig.from_yaml("configs/value-smoke.yaml")
+    assert config.train_policy_seeds == (27,)
+    assert config.eval_policy_seeds == (127,)
+    assert config.candidate_steps == (20, 60)
+    assert config.target_budgets == (0.25, 0.5)

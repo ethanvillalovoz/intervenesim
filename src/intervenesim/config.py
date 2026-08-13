@@ -129,3 +129,62 @@ class ResearchConfig:
         ):
             data[key] = list(data[key])
         return data
+
+
+@dataclass(frozen=True)
+class ValueConfig:
+    seed: int = 27
+    train_policy_seeds: tuple[int, ...] = (27, 127, 227)
+    eval_policy_seeds: tuple[int, ...] = (327, 427)
+    tasks: tuple[str, ...] = ("can", "milk", "bread", "cereal")
+    disturbances: tuple[str, ...] = (
+        "nominal",
+        "object_shift",
+        "action_noise",
+        "action_delay",
+        "gripper_slip",
+    )
+    candidate_steps: tuple[int, ...] = (10, 30, 50, 70, 90, 110, 130)
+    target_budgets: tuple[float, ...] = (0.10, 0.25, 0.50, 0.75)
+    train_episodes: int = 4
+    eval_episodes: int = 6
+    value_epochs: int = 60
+    value_hidden_dims: tuple[int, ...] = (128, 128)
+    batch_size: int = 512
+    learning_rate: float = 3e-4
+    weight_decay: float = 1e-6
+    max_steps: int = 260
+    device: str = "auto"
+    research_run: str = "artifacts/runs/research-v1"
+    output_dir: str = "artifacts/runs/value-v1"
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> ValueConfig:
+        with Path(path).open(encoding="utf-8") as handle:
+            raw: dict[str, Any] = yaml.safe_load(handle) or {}
+        for key in (
+            "train_policy_seeds",
+            "eval_policy_seeds",
+            "tasks",
+            "disturbances",
+            "candidate_steps",
+            "target_budgets",
+            "value_hidden_dims",
+        ):
+            if key in raw:
+                raw[key] = tuple(raw[key])
+        return cls(**raw)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        for key in (
+            "train_policy_seeds",
+            "eval_policy_seeds",
+            "tasks",
+            "disturbances",
+            "candidate_steps",
+            "target_budgets",
+            "value_hidden_dims",
+        ):
+            data[key] = list(data[key])
+        return data
