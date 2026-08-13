@@ -1,0 +1,24 @@
+seed: 27
+base_episodes: 120
+extra_episodes: 40
+recovery_episodes: 60
+train_epochs: 80
+fine_tune_epochs: 35
+eval_episodes: 50
+hidden_dims:
+- 256
+- 256
+- 128
+batch_size: 512
+learning_rate: 0.0003
+weight_decay: 1.0e-06
+device: auto
+max_steps: 260
+disturbances:
+- nominal
+- object_shift
+- action_noise
+- action_delay
+- gripper_slip
+output_dir: artifacts/runs/benchmark-v1
+expert_attempt_multiplier: 3

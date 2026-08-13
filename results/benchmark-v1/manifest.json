@@ -1,0 +1,165 @@
+{
+  "collection": {
+    "base": {
+      "attempted_episodes": 120,
+      "disturbance_counts": {
+        "nominal": 120
+      },
+      "intervention_samples": 0,
+      "requested_episodes": 120,
+      "samples": 14811,
+      "successful_episodes": 120
+    },
+    "extra": {
+      "attempted_episodes": 40,
+      "disturbance_counts": {
+        "nominal": 40
+      },
+      "intervention_samples": 0,
+      "requested_episodes": 40,
+      "samples": 4820,
+      "successful_episodes": 40
+    },
+    "recovery": {
+      "attempted_episodes": 61,
+      "disturbance_counts": {
+        "action_delay": 15,
+        "action_noise": 15,
+        "gripper_slip": 14,
+        "object_shift": 16
+      },
+      "intervention_samples": 6991,
+      "requested_episodes": 60,
+      "samples": 6991,
+      "successful_episodes": 60
+    }
+  },
+  "config": {
+    "base_episodes": 120,
+    "batch_size": 512,
+    "device": "auto",
+    "disturbances": [
+      "nominal",
+      "object_shift",
+      "action_noise",
+      "action_delay",
+      "gripper_slip"
+    ],
+    "eval_episodes": 50,
+    "expert_attempt_multiplier": 3,
+    "extra_episodes": 40,
+    "fine_tune_epochs": 35,
+    "hidden_dims": [
+      256,
+      256,
+      128
+    ],
+    "learning_rate": 0.0003,
+    "max_steps": 260,
+    "output_dir": "artifacts/runs/benchmark-v1",
+    "recovery_episodes": 60,
+    "seed": 27,
+    "train_epochs": 80,
+    "weight_decay": 1e-06
+  },
+  "datasets": {
+    "base": "artifacts/runs/benchmark-v1/datasets/base_clean.npz",
+    "extra_equal_budget": "artifacts/runs/benchmark-v1/datasets/extra_clean_equal_budget.npz",
+    "recovery_equal_budget": "artifacts/runs/benchmark-v1/datasets/recovery_equal_budget.npz"
+  },
+  "elapsed_seconds": 829.7642750740051,
+  "sample_budget": 4820,
+  "system": {
+    "git_commit": "21fc703070582104b84678844882419f3e97b941",
+    "machine": "arm64",
+    "mps_available": true,
+    "numpy": "2.5.2",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.13 (main, Aug  7 2026, 02:15:23) [Clang 22.1.3 ]",
+    "torch": "2.13.0"
+  },
+  "training": {
+    "baseline": {
+      "best_validation_loss": 0.0017902886029332876,
+      "checkpoint": "artifacts/runs/benchmark-v1/checkpoints/baseline.pt",
+      "condition": "baseline",
+      "device": "mps",
+      "episode_count": 120,
+      "history": "artifacts/runs/benchmark-v1/checkpoints/baseline.history.json",
+      "sample_count": 14811,
+      "sources": {
+        "clean": 14811
+      },
+      "train_config": {
+        "batch_size": 512,
+        "device": "auto",
+        "epochs": 80,
+        "extra": {},
+        "fine_tune_from": null,
+        "hidden_dims": [
+          256,
+          256,
+          128
+        ],
+        "learning_rate": 0.0003,
+        "seed": 27,
+        "weight_decay": 1e-06
+      }
+    },
+    "more_demos": {
+      "best_validation_loss": 0.00144658621866256,
+      "checkpoint": "artifacts/runs/benchmark-v1/checkpoints/more_demos.pt",
+      "condition": "more_demos",
+      "device": "mps",
+      "episode_count": 160,
+      "history": "artifacts/runs/benchmark-v1/checkpoints/more_demos.history.json",
+      "sample_count": 19631,
+      "sources": {
+        "clean": 19631
+      },
+      "train_config": {
+        "batch_size": 512,
+        "device": "auto",
+        "epochs": 35,
+        "extra": {},
+        "fine_tune_from": "artifacts/runs/benchmark-v1/checkpoints/baseline.pt",
+        "hidden_dims": [
+          256,
+          256,
+          128
+        ],
+        "learning_rate": 0.00015,
+        "seed": 28,
+        "weight_decay": 1e-06
+      }
+    },
+    "recovery_data": {
+      "best_validation_loss": 0.0023707523941993713,
+      "checkpoint": "artifacts/runs/benchmark-v1/checkpoints/recovery_data.pt",
+      "condition": "recovery_data",
+      "device": "mps",
+      "episode_count": 180,
+      "history": "artifacts/runs/benchmark-v1/checkpoints/recovery_data.history.json",
+      "sample_count": 19631,
+      "sources": {
+        "clean": 14811,
+        "recovery": 4820
+      },
+      "train_config": {
+        "batch_size": 512,
+        "device": "auto",
+        "epochs": 35,
+        "extra": {},
+        "fine_tune_from": "artifacts/runs/benchmark-v1/checkpoints/baseline.pt",
+        "hidden_dims": [
+          256,
+          256,
+          128
+        ],
+        "learning_rate": 0.00015,
+        "seed": 28,
+        "weight_decay": 1e-06
+      }
+    }
+  }
+}
