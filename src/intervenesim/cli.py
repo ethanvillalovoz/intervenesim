@@ -14,7 +14,7 @@ from intervenesim.config import BenchmarkConfig, ResearchConfig
 from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
 from intervenesim.research import run_research
-from intervenesim.video import record_benchmark_comparison
+from intervenesim.video import record_benchmark_comparison, record_research_comparison
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -90,6 +90,22 @@ def record_comparison(
 ) -> None:
     """Record a matched baseline-failure / recovery-success benchmark episode."""
     result = record_benchmark_comparison(run, output, disturbance)
+    console.print_json(json.dumps(result))
+
+
+@app.command("record-research-comparison")
+def record_x_comparison(
+    run: Annotated[Path, typer.Option(exists=True, file_okay=False)] = Path(
+        "artifacts/runs/research-v1"
+    ),
+    output: Annotated[Path, typer.Option()] = Path("artifacts/videos/intervenesim-x.mp4"),
+    task: Annotated[str, typer.Option()] = "cereal",
+    disturbance: Annotated[str, typer.Option()] = "gripper_slip",
+    training_seed: Annotated[int, typer.Option()] = 27,
+    budget: Annotated[int, typer.Option()] = 4800,
+) -> None:
+    """Record a matched InterveneSim-X baseline failure / recovery success."""
+    result = record_research_comparison(run, output, task, disturbance, training_seed, budget)
     console.print_json(json.dumps(result))
 
 
