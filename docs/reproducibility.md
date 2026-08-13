@@ -1,4 +1,4 @@
-# Reproducing InterveneSim-X
+# Reproducing InterveneSim-Value
 
 ## Reference environment
 
@@ -32,13 +32,41 @@ uv run intervenesim research \
 
 ```bash
 uv run intervenesim research --config configs/research.yaml
+uv run intervenesim value-research --config configs/value.yaml
 ```
 
-The full run stores data, checkpoints, and results under `artifacts/runs/research-v1`.
+The first command builds the prerequisite policies under `artifacts/runs/research-v1`.
+The second collects matched counterfactual branches and stores the v0.3 experiment under
+`artifacts/runs/value-v1`.
 Existing complete artifacts are loaded on restart, so a failed or interrupted run resumes
 at the next unfinished condition. Do not delete the run directory between resumptions.
 
-## Published configuration
+## Primary v0.3 configuration
+
+The frozen resolved configuration is
+[`results/intervenesim-value/config.resolved.yaml`](../results/intervenesim-value/config.resolved.yaml).
+It defines three training-policy seeds, two unseen evaluation-policy seeds, four objects,
+five deployment conditions, seven fixed candidate steps, and four target intervention
+budgets. Thresholds are derived only from training-policy episodes.
+
+The five-fold policy-seed analysis in the frozen results is explicitly exploratory because
+it was added after inspection of the primary three-seed-train/two-seed-test audit.
+
+## Optional vision and human capture
+
+```bash
+uv sync --locked --extra vision
+uv run intervenesim visual-research --config configs/visual.yaml
+uv run intervenesim capture-human-corrections \
+  --checkpoint artifacts/runs/research-v1/checkpoints/seed-27/baseline.pt \
+  --output artifacts/human/corrections.npz
+```
+
+The visual command downloads free ImageNet ResNet-18 weights on first use. The human command
+opens a local simulator window: press `T` to take over and `Esc` to end the episode. Human
+archives use a separate schema and are not part of the published scripted result.
+
+## Earlier v0.2 configuration
 
 The frozen resolved configuration is
 [`results/intervenesim-x/config.resolved.yaml`](../results/intervenesim-x/config.resolved.yaml).
@@ -51,13 +79,17 @@ It defines:
 - 80 baseline epochs, 35 fine-tuning epochs, and 50 risk epochs;
 - MLP widths `256, 256, 128` and risk widths `128, 128`.
 
-## Rebuild the paper and video
+## Rebuild the papers and videos
 
 After running the benchmark, install the paper-only dependencies and rebuild:
 
 ```bash
 uv sync --locked --extra paper
 uv run python scripts/build_paper.py
+uv run python scripts/build_value_paper.py
+uv run intervenesim record-value-counterfactual \
+  --run artifacts/runs/value-v1 \
+  --output artifacts/videos/intervenesim-value-fork.mp4
 uv run intervenesim record-research-comparison \
   --run artifacts/runs/research-v1 \
   --output artifacts/videos/intervenesim-x.mp4 \
@@ -70,8 +102,13 @@ and `pypdf`; those paper-only tools are not required for the simulator or benchm
 
 ## Interpretation checklist
 
+- Treat the v0.3 three-seed-train/two-seed-test split as primary.
+- Treat five-fold value-gate comparisons as exploratory.
+- Compare gates using both realized intervention rate and task success.
+- Do not equate failure probability with positive intervention value.
+- Treat cross-camera visual ranking and cross-camera calibration as separate findings.
 - Treat training seed—not episode—as the primary unit of method uncertainty.
 - Do not call the budget curve monotonic; the reference seed declines at 4,800 labels.
 - Treat the rejected-action contrastive objective as a negative result.
 - Treat the threshold sweep as exploratory because it followed the help-gate audit.
-- Do not infer visual robustness, real-world transfer, human-label quality, or safety.
+- Do not infer real-world transfer, human-label quality, or safety.
