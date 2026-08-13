@@ -1,4 +1,4 @@
-from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig
+from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig, VisualConfig
 
 
 def test_config_loads_sequences_as_tuples() -> None:
@@ -23,3 +23,11 @@ def test_value_config_loads_counterfactual_protocol() -> None:
     assert config.eval_policy_seeds == (127,)
     assert config.candidate_steps == (20, 60)
     assert config.target_budgets == (0.25, 0.5)
+
+
+def test_visual_config_loads_camera_transfer_protocol() -> None:
+    config = VisualConfig.from_yaml("configs/visual-smoke.yaml")
+    assert config.tasks == ("can",)
+    assert config.cameras == ("frontview", "agentview")
+    assert config.train_policy_seed == 27
+    assert config.eval_policy_seed == 127

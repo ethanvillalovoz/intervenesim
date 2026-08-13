@@ -154,9 +154,34 @@ def run_value_research(
             sort_keys=True,
         )
     )
+    _emit(progress, "running secondary leave-one-policy-seed-out analysis")
+    crossval = _cross_validate_policy_seeds(
+        train,
+        evaluation,
+        risk_checkpoint,
+        checkpoints / "crossval",
+        config,
+    )
+    crossval.to_csv(results / "crossval_gate_episodes.csv", index=False)
+    crossval_summary = summarize_gate_evaluation(crossval)
+    crossval_summary.to_csv(results / "crossval_gate_summary.csv", index=False)
+    crossval_seed_rates = (
+        crossval.groupby(["policy_seed", "method", "target_budget"], dropna=False)[
+            ["success", "help_requested"]
+        ]
+        .mean()
+        .reset_index()
+        .rename(columns={"success": "success_rate", "help_requested": "intervention_rate"})
+    )
+    crossval_seed_rates.to_csv(results / "crossval_seed_rates.csv", index=False)
+    crossval_paired = _crossval_paired(crossval_seed_rates)
+    crossval_paired.to_csv(results / "crossval_paired.csv", index=False)
     _plot_frontier(summary, results / "value_frontier.png")
     _plot_precision(summary, results / "request_precision.png")
-    report = _markdown_report(train, evaluation, summary, metrics, config)
+    _plot_crossval(crossval_seed_rates, results / "crossval_success.png")
+    report = _markdown_report(
+        train, evaluation, summary, metrics, crossval_seed_rates, crossval_paired, config
+    )
     (results / "report.md").write_text(report, encoding="utf-8")
     manifest: dict[str, object] = {
         "elapsed_seconds": time.time() - started,
@@ -179,6 +204,9 @@ def run_value_research(
             "gate_episodes": str(results / "gate_episodes.csv"),
             "frontier": str(results / "value_frontier.png"),
             "precision": str(results / "request_precision.png"),
+            "crossval_seed_rates": str(results / "crossval_seed_rates.csv"),
+            "crossval_paired": str(results / "crossval_paired.csv"),
+            "crossval_success": str(results / "crossval_success.png"),
         },
     }
     (results / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
@@ -239,11 +267,69 @@ def _plot_precision(summary: pd.DataFrame, path: Path) -> None:
     plt.close(figure)
 
 
+def _plot_crossval(seed_rates: pd.DataFrame, path: Path) -> None:
+    data = seed_rates.loc[
+        seed_rates["method"].isin(["value_gate", "risk_gate", "uncertainty_gate"])
+        & seed_rates["target_budget"].isin([0.25, 0.5])
+    ].copy()
+    labels = {
+        "value_gate": "Value gate",
+        "risk_gate": "Failure risk",
+        "uncertainty_gate": "Ensemble uncertainty",
+    }
+    data["method"] = data["method"].map(labels)
+    data["budget"] = data["target_budget"].map(
+        {0.25: "25% target budget", 0.5: "50% target budget"}
+    )
+    sns.set_theme(style="whitegrid", context="talk")
+    figure, axes = plt.subplots(1, 2, figsize=(12, 5.8), sharey=True)
+    order = ["Value gate", "Failure risk", "Ensemble uncertainty"]
+    palette = ["#2563eb", "#ef4444", "#f59e0b"]
+    for axis, budget in zip(axes, ("25% target budget", "50% target budget"), strict=True):
+        subset = data.loc[data["budget"] == budget]
+        sns.barplot(
+            data=subset,
+            x="method",
+            y="success_rate",
+            order=order,
+            hue="method",
+            hue_order=order,
+            errorbar="sd",
+            palette=palette,
+            legend=False,
+            ax=axis,
+        )
+        sns.stripplot(
+            data=subset,
+            x="method",
+            y="success_rate",
+            order=order,
+            color="#111827",
+            alpha=0.65,
+            jitter=0.12,
+            size=5,
+            ax=axis,
+        )
+        axis.set_title(budget)
+        axis.set_xlabel("")
+        axis.tick_params(axis="x", labelrotation=15)
+        axis.set_ylim(0.45, 1.01)
+        axis.yaxis.set_major_formatter(lambda value, _: f"{100 * value:.0f}%")
+    axes[0].set_ylabel("Held-out policy success")
+    axes[1].set_ylabel("")
+    figure.suptitle("Five-fold policy-seed robustness", y=1.01)
+    figure.tight_layout()
+    figure.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(figure)
+
+
 def _markdown_report(
     train: CounterfactualData,
     evaluation: CounterfactualData,
     summary: pd.DataFrame,
     metrics: dict[str, dict[str, float]],
+    crossval_seed_rates: pd.DataFrame,
+    crossval_paired: pd.DataFrame,
     config: ValueConfig,
 ) -> str:
     table = summary.copy()
@@ -278,6 +364,34 @@ def _markdown_report(
             for method, values in metrics.items()
         ]
     ).to_markdown(index=False, floatfmt=".3f")
+    crossval_aggregate = (
+        crossval_seed_rates.loc[
+            crossval_seed_rates["method"].isin(["value_gate", "risk_gate", "uncertainty_gate"])
+        ]
+        .groupby(["method", "target_budget"])
+        .agg(
+            success_mean=("success_rate", "mean"),
+            success_std=("success_rate", "std"),
+            intervention_mean=("intervention_rate", "mean"),
+        )
+        .reset_index()
+    )
+    crossval_aggregate["success"] = crossval_aggregate.apply(
+        lambda row: f"{100 * row['success_mean']:.1f}% +/- {100 * row['success_std']:.1f}%",
+        axis=1,
+    )
+    crossval_aggregate["realized_intervention_rate"] = crossval_aggregate["intervention_mean"].map(
+        lambda value: f"{100 * value:.1f}%"
+    )
+    crossval_table = crossval_aggregate[
+        ["method", "target_budget", "success", "realized_intervention_rate"]
+    ].to_markdown(index=False)
+    paired_table = crossval_paired.copy()
+    paired_table["mean_delta"] = paired_table["mean_delta"].map(
+        lambda value: f"{100 * value:+.1f} pp"
+    )
+    paired_table["std_delta"] = paired_table["std_delta"].map(lambda value: f"{100 * value:.1f} pp")
+    paired_table = paired_table.to_markdown(index=False)
     return "\n".join(
         [
             "# InterveneSim-Value research report",
@@ -298,6 +412,15 @@ def _markdown_report(
             "Thresholds were selected only from training-policy episodes. Oracle regret is "
             "computed at each method's realized number of evaluation interventions.",
             "",
+            "## Secondary five-fold policy-seed cross-validation",
+            "",
+            "This analysis was added after the primary held-out-policy audit and is therefore "
+            "exploratory. Each fold trains on four policy seeds and evaluates the fifth.",
+            "",
+            crossval_table,
+            "",
+            paired_table,
+            "",
             "## Boundaries",
             "",
             "The counterfactual is exact for this simulator and scripted expert only. It does "
@@ -310,3 +433,76 @@ def _markdown_report(
 def _emit(progress: ProgressCallback | None, message: str) -> None:
     if progress:
         progress(message)
+
+
+def _cross_validate_policy_seeds(
+    train: CounterfactualData,
+    evaluation: CounterfactualData,
+    risk_checkpoint: Path,
+    checkpoint_dir: Path,
+    config: ValueConfig,
+) -> pd.DataFrame:
+    all_data = CounterfactualData.concatenate([train, evaluation])
+    parts: list[pd.DataFrame] = []
+    for held_out_seed in np.unique(all_data.policy_seeds):
+        train_data = all_data.subset(all_data.policy_seeds != held_out_seed)
+        eval_data = all_data.subset(all_data.policy_seeds == held_out_seed)
+        checkpoint = checkpoint_dir / f"held-out-{held_out_seed}.pt"
+        if not checkpoint.exists():
+            train_value_model(
+                train_data,
+                checkpoint,
+                ValueTrainConfig(
+                    epochs=config.value_epochs,
+                    hidden_dims=config.value_hidden_dims,
+                    batch_size=config.batch_size,
+                    learning_rate=config.learning_rate,
+                    weight_decay=config.weight_decay,
+                    device=config.device,
+                    seed=config.seed + int(held_out_seed),
+                ),
+            )
+        agent = ValueAgent.load(checkpoint, device=config.device)
+        train_scores = {
+            "value_gate": agent.scores(train_data),
+            "risk_gate": risk_scores(train_data, risk_checkpoint),
+            "uncertainty_gate": train_data.ensemble_uncertainty,
+        }
+        eval_scores = {
+            "value_gate": agent.scores(eval_data),
+            "risk_gate": risk_scores(eval_data, risk_checkpoint),
+            "uncertainty_gate": eval_data.ensemble_uncertainty,
+        }
+        thresholds = {
+            method: budget_thresholds(scores, train_data.episode_ids, config.target_budgets)
+            for method, scores in train_scores.items()
+        }
+        parts.append(
+            evaluate_counterfactual_gates(eval_data, eval_scores, thresholds, config.target_budgets)
+        )
+    return pd.concat(parts, ignore_index=True)
+
+
+def _crossval_paired(seed_rates: pd.DataFrame) -> pd.DataFrame:
+    selected = seed_rates.loc[
+        seed_rates["method"].isin(["value_gate", "risk_gate", "uncertainty_gate"])
+    ]
+    rows: list[dict[str, object]] = []
+    for budget in (0.25, 0.5):
+        pivot = selected.loc[selected["target_budget"] == budget].pivot(
+            index="policy_seed", columns="method", values="success_rate"
+        )
+        for reference in ("risk_gate", "uncertainty_gate"):
+            differences = (pivot["value_gate"] - pivot[reference]).dropna()
+            rows.append(
+                {
+                    "budget": budget,
+                    "challenger": "value_gate",
+                    "reference": reference,
+                    "policy_seeds": len(differences),
+                    "mean_delta": float(differences.mean()),
+                    "std_delta": float(differences.std(ddof=1)),
+                    "positive_seeds": int((differences > 0).sum()),
+                }
+            )
+    return pd.DataFrame(rows)

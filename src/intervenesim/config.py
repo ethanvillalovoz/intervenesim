@@ -188,3 +188,41 @@ class ValueConfig:
         ):
             data[key] = list(data[key])
         return data
+
+
+@dataclass(frozen=True)
+class VisualConfig:
+    seed: int = 117
+    train_policy_seed: int = 27
+    eval_policy_seed: int = 327
+    tasks: tuple[str, ...] = ("can", "milk", "bread", "cereal")
+    disturbances: tuple[str, ...] = (
+        "nominal",
+        "object_shift",
+        "action_noise",
+        "action_delay",
+        "gripper_slip",
+    )
+    candidate_steps: tuple[int, ...] = (10, 30, 50, 70, 90, 110, 130)
+    cameras: tuple[str, ...] = ("frontview", "agentview")
+    episodes_per_task: int = 2
+    epochs: int = 30
+    max_steps: int = 260
+    device: str = "auto"
+    research_run: str = "artifacts/runs/research-v1"
+    output_dir: str = "artifacts/runs/visual-v1"
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> VisualConfig:
+        with Path(path).open(encoding="utf-8") as handle:
+            raw: dict[str, Any] = yaml.safe_load(handle) or {}
+        for key in ("tasks", "disturbances", "candidate_steps", "cameras"):
+            if key in raw:
+                raw[key] = tuple(raw[key])
+        return cls(**raw)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        for key in ("tasks", "disturbances", "candidate_steps", "cameras"):
+            data[key] = list(data[key])
+        return data

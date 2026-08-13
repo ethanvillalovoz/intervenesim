@@ -155,6 +155,22 @@ class CounterfactualData:
             }
         )
 
+    def subset(self, mask: np.ndarray) -> CounterfactualData:
+        return CounterfactualData(
+            self.observations[mask],
+            self.observation_deltas[mask],
+            self.autonomous_actions[mask],
+            self.ensemble_uncertainty[mask],
+            self.autonomous_success[mask],
+            self.assisted_success[mask],
+            self.steps[mask],
+            self.episode_ids[mask],
+            self.policy_seeds[mask],
+            self.tasks[mask],
+            self.disturbances[mask],
+            self.metadata,
+        )
+
 
 def collect_counterfactual_data(
     policy_checkpoint: str | Path,

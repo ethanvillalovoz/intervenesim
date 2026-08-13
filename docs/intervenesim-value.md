@@ -66,19 +66,29 @@ Training policy seed is the unit of uncertainty for final method comparisons. Ep
 bootstrap intervals are secondary because decision candidates within an episode are
 correlated.
 
+After inspecting the primary three-seed-train/two-seed-test result, a five-fold
+leave-one-policy-seed-out analysis was added to estimate seed-level consistency. This
+analysis is explicitly exploratory: each fold trains on four policy seeds, evaluates the
+fifth, and preserves episode grouping, but it was not part of the predeclared primary test.
+
 ## Secondary extensions
 
 ### Vision
 
-A frozen compact visual encoder is evaluated using RGB plus proprioception. Visual results
-are secondary and must report held-out camera, lighting, texture, and object variations.
-State-based counterfactual value remains the primary causal experiment.
+A frozen compact visual encoder is evaluated using RGB plus proprioception. The head is
+trained on one camera and evaluated on both that view and a second zero-shot camera. No
+lighting or texture robustness claim is made. State-based counterfactual value remains the
+primary causal experiment.
 
 ### Human correction capture
 
 A keyboard/gamepad interface records actual takeover timing and actions in simulation.
 Human data is kept distinct from scripted labels and is not silently pooled into the
 primary result.
+
+The included `capture-human-corrections` command runs the learned policy until the operator
+presses `T`, then records keyboard Cartesian and gripper commands with their exact takeover
+step. `Esc` ends an episode. Human action archives have a separate schema and output path.
 
 ## Boundaries
 
