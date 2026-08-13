@@ -3,8 +3,8 @@ base_episodes: 3
 extra_episodes: 2
 recovery_episodes: 2
 train_epochs: 2
+fine_tune_epochs: 2
 eval_episodes: 2
 hidden_dims: [64, 64]
 batch_size: 64
 device: cpu
-
