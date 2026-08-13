@@ -173,6 +173,7 @@ class RiskTrainConfig:
     device: str
     seed: int
     target_recall: float = 0.9
+    detection_horizon: int = 3
 
 
 class RiskAgent:
@@ -189,10 +190,23 @@ class RiskAgent:
         self.threshold = threshold
         self.device = device
         self.metadata = metadata or {}
+        self._previous_observation: np.ndarray | None = None
+
+    def reset(self) -> None:
+        """Reset temporal state at the start of an episode."""
+        self._previous_observation = None
 
     @torch.inference_mode()
     def score(self, observation: np.ndarray) -> float:
-        normalized = self.normalizer.transform(np.asarray(observation, dtype=np.float32))
+        raw = np.asarray(observation, dtype=np.float32)
+        if self.metadata.get("feature_mode") == "observation_delta":
+            previous = self._previous_observation
+            delta = np.zeros_like(raw) if previous is None else raw - previous
+            features = np.concatenate([raw, delta])
+            self._previous_observation = raw.copy()
+        else:
+            features = raw
+        normalized = self.normalizer.transform(features)
         tensor = torch.from_numpy(normalized).to(self.device).unsqueeze(0)
         return float(torch.sigmoid(self.model(tensor)).cpu().item())
 
@@ -226,9 +240,14 @@ def train_risk_model(
     validation_mask = np.asarray([ep in validation_episodes for ep in data.episode_ids])
     train_indices = np.flatnonzero(~validation_mask)
     validation_indices = np.flatnonzero(validation_mask)
-    normalizer = Normalizer.fit(data.observations[train_indices])
-    observations = normalizer.transform(data.observations).astype(np.float32)
-    train_targets = data.targets[train_indices]
+    temporal_observations = temporal_features(data.observations, data.episode_ids)
+    targets = np.asarray(
+        [float(0 <= steps < config.detection_horizon) for steps in data.steps_to_intervention],
+        dtype=np.float32,
+    )
+    normalizer = Normalizer.fit(temporal_observations[train_indices])
+    observations = normalizer.transform(temporal_observations).astype(np.float32)
+    train_targets = targets[train_indices]
     positives = max(1.0, float(train_targets.sum()))
     negatives = max(1.0, float(len(train_targets) - positives))
     positive_weight = torch.tensor(negatives / positives, device=device)
@@ -242,7 +261,7 @@ def train_risk_model(
         shuffle=True,
         generator=torch.Generator().manual_seed(config.seed),
     )
-    model = RiskNetwork(data.observation_dim, config.hidden_dims).to(device)
+    model = RiskNetwork(observations.shape[1], config.hidden_dims).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
@@ -264,7 +283,7 @@ def train_risk_model(
             optimizer.step()
             train_losses.append(float(loss.detach().cpu()))
         probabilities = _predict(model, observations[validation_indices], device)
-        validation_loss = _binary_log_loss(data.targets[validation_indices], probabilities)
+        validation_loss = _binary_log_loss(targets[validation_indices], probabilities)
         history.append(
             {
                 "epoch": epoch + 1,
@@ -280,22 +299,25 @@ def train_risk_model(
     if best_state is not None:
         model.load_state_dict(best_state)
     probabilities = _predict(model, observations[validation_indices], device)
-    targets = data.targets[validation_indices]
-    threshold = select_threshold(targets, probabilities, config.target_recall)
-    metrics = binary_metrics(targets, probabilities, threshold)
+    validation_targets = targets[validation_indices]
+    threshold = select_threshold(validation_targets, probabilities, config.target_recall)
+    metrics = binary_metrics(validation_targets, probabilities, threshold)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     metadata = {
         "train_config": asdict(config),
         "sample_count": data.sample_count,
         "positive_count": data.positive_count,
+        "detection_positive_count": int(targets.sum()),
         "validation_episodes": sorted(validation_episodes),
         "validation_metrics": metrics,
+        "feature_mode": "observation_delta",
+        "raw_observation_dim": data.observation_dim,
     }
     torch.save(
         {
             "model": model.state_dict(),
-            "observation_dim": data.observation_dim,
+            "observation_dim": int(observations.shape[1]),
             "hidden_dims": list(config.hidden_dims),
             "normalizer_mean": normalizer.mean,
             "normalizer_std": normalizer.std,
@@ -306,6 +328,17 @@ def train_risk_model(
     )
     output.with_suffix(".history.json").write_text(json.dumps(history, indent=2))
     return {"checkpoint": str(output), "threshold": threshold, **metadata}
+
+
+def temporal_features(observations: np.ndarray, episode_ids: np.ndarray) -> np.ndarray:
+    """Combine each observation with its causal one-step change."""
+    observations = np.asarray(observations, dtype=np.float32)
+    episode_ids = np.asarray(episode_ids)
+    deltas = np.zeros_like(observations)
+    if len(observations) > 1:
+        same_episode = episode_ids[1:] == episode_ids[:-1]
+        deltas[1:][same_episode] = observations[1:][same_episode] - observations[:-1][same_episode]
+    return np.concatenate([observations, deltas], axis=1)
 
 
 def select_threshold(targets: np.ndarray, probabilities: np.ndarray, target_recall: float) -> float:

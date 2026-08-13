@@ -73,6 +73,9 @@ class ResearchConfig:
     recovery_episodes_per_task: int = 18
     risk_nominal_episodes_per_task: int = 6
     risk_horizon: int = 16
+    risk_detection_horizon: int = 3
+    minimum_help_step: int = 5
+    help_thresholds: tuple[float, ...] = (0.90, 0.95, 0.97, 0.99)
     train_epochs: int = 80
     fine_tune_epochs: int = 35
     risk_epochs: int = 50
@@ -106,6 +109,7 @@ class ResearchConfig:
             "tasks",
             "hidden_dims",
             "risk_hidden_dims",
+            "help_thresholds",
             "disturbances",
         ):
             if key in raw:
@@ -120,6 +124,7 @@ class ResearchConfig:
             "tasks",
             "hidden_dims",
             "risk_hidden_dims",
+            "help_thresholds",
             "disturbances",
         ):
             data[key] = list(data[key])

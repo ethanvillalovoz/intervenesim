@@ -26,18 +26,25 @@ def evaluate_help_seeking(
     progress: Callable[[str], None] | None = None,
     task: str = "can",
     task_conditioning: bool = False,
+    minimum_help_step: int = 5,
+    help_modes: tuple[str, ...] = HELP_MODES,
+    risk_threshold: float | None = None,
 ) -> pd.DataFrame:
     policy = PolicyAgent.load(policy_checkpoint, device=device)
     risk = RiskAgent.load(risk_checkpoint, device=device)
     records: list[dict[str, object]] = []
     with PickPlaceEnv(max_steps=max_steps, task=task, task_conditioning=task_conditioning) as env:
-        for mode in HELP_MODES:
+        threshold = risk.threshold if risk_threshold is None else risk_threshold
+        for mode in help_modes:
+            if mode not in HELP_MODES:
+                raise ValueError(f"unknown help mode: {mode}")
             for disturbance_name in disturbances:
                 for episode in range(episodes):
                     episode_seed = seed + episode
                     disturbance = Disturbance(disturbance_name, seed + 50_000 + episode)
                     disturbance.reset(env.action_dim)
                     state = env.reset(episode_seed)
+                    risk.reset()
                     expert = ScriptedExpert()
                     supervisor = InterventionSupervisor()
                     supervisor.reset(state)
@@ -53,7 +60,11 @@ def evaluate_help_seeking(
                         request = (
                             (mode == "always_help" and step == 0)
                             or (mode == "oracle_help" and oracle_request)
-                            or (mode == "learned_help" and risk_score >= risk.threshold)
+                            or (
+                                mode == "learned_help"
+                                and step >= minimum_help_step
+                                and risk_score >= threshold
+                            )
                         )
                         if not help_requested and request:
                             help_requested = True
@@ -80,7 +91,7 @@ def evaluate_help_seeking(
                             "help_step": help_step,
                             "request_score": request_score,
                             "max_risk_score": max_risk_score,
-                            "risk_threshold": risk.threshold,
+                            "risk_threshold": threshold,
                             "disturbance_fired": disturbance.fired,
                             "disturbance_trigger_step": disturbance.trigger_step,
                             "steps": step + 1,

@@ -1,6 +1,12 @@
 import numpy as np
 
-from intervenesim.risk import RiskBuilder, RiskData, binary_metrics, select_threshold
+from intervenesim.risk import (
+    RiskBuilder,
+    RiskData,
+    binary_metrics,
+    select_threshold,
+    temporal_features,
+)
 
 
 def test_risk_data_round_trip(tmp_path) -> None:
@@ -26,3 +32,10 @@ def test_risk_metrics_are_perfect_for_separable_predictions() -> None:
     assert metrics["auroc"] == 1.0
     assert metrics["average_precision"] == 1.0
     assert metrics["recall"] == 1.0
+
+
+def test_temporal_features_reset_delta_between_episodes() -> None:
+    observations = np.asarray([[1, 2], [3, 5], [10, 20], [13, 25]], dtype=np.float32)
+    features = temporal_features(observations, np.asarray([0, 0, 1, 1]))
+    np.testing.assert_array_equal(features[:, :2], observations)
+    np.testing.assert_array_equal(features[:, 2:], [[0, 0], [2, 3], [0, 0], [3, 5]])

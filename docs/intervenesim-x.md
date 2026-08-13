@@ -32,19 +32,33 @@ The contrastive loss is applied only when the rejected and corrective actions di
 minimum distance. This prevents artificial repulsion when the supervisor intervenes even
 though the baseline action already agrees with the expert.
 
-## Learned intervention gate
+## Learned intervention gate (exploratory correction)
 
 The recovery collector preserves pre-intervention rollout states from both successful and
-unsuccessful expert-takeover attempts. A state receives a
-positive risk label if the privileged supervisor will intervene within a fixed prediction
-horizon. Earlier states and nominal successful rollouts are negative examples. Training
-uses episode-disjoint validation data, class-balanced binary cross entropy, and a
-validation-selected threshold targeting high recall.
+unsuccessful expert-takeover attempts. The predeclared static, 16-step predictor ranked its
+episode-disjoint validation examples but requested help at reset on every deployment
+episode. That is a causal error: before a randomized disturbance occurs, the state may be
+identical to a nominal state, so the model cannot infer the future disturbance.
+
+The corrected exploratory detector combines each current observation with its causal
+one-step change and predicts an imminent intervention within three steps. Earlier states
+and nominal successful rollouts are negative examples. Training uses episode-disjoint
+validation data, class-balanced binary cross entropy, and a validation-selected threshold
+targeting high recall. The failed static gate is retained as an explicit negative finding;
+the correction is not presented as predeclared evidence.
+
+After observing the high-recall gate's nominal false alarms, thresholds 0.90, 0.95, 0.97,
+and 0.99 are evaluated as a complete exploratory operating-point sweep. These thresholds
+were selected after diagnosis and are therefore descriptive rather than confirmatory.
 
 The gate is evaluated without privileged state access. Once it requests help, the scripted
 expert takes over and synthetic actuator corruption is bypassed, matching the correction
 collection protocol. Reported metrics include success, intervention rate, nominal false
 alarm rate, request timing, risk AUROC, average precision, Brier score, and calibration.
+Help requests are disabled during the first five control steps because the benchmark's
+privileged supervisor cannot yet trigger under any disturbance. This causal warm-up also
+prevents a reset-distribution classifier transient from being mistaken for a selective
+request.
 
 ## Generalization
 

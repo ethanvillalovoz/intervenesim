@@ -12,3 +12,6 @@ def test_research_config_loads_tasks_and_seeds() -> None:
     assert config.tasks == ("can", "milk")
     assert config.training_seeds == (71, 72)
     assert config.budgets == (100, 200)
+    assert config.minimum_help_step == 5
+    assert config.risk_detection_horizon == 3
+    assert config.help_thresholds == (0.9, 0.97)

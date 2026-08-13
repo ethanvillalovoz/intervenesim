@@ -7,6 +7,9 @@ extra_episodes_per_task: 2
 recovery_episodes_per_task: 2
 risk_nominal_episodes_per_task: 1
 risk_horizon: 8
+risk_detection_horizon: 3
+minimum_help_step: 5
+help_thresholds: [0.90, 0.97]
 train_epochs: 2
 fine_tune_epochs: 1
 risk_epochs: 2

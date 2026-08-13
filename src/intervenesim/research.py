@@ -19,7 +19,7 @@ from intervenesim.dataset import TrajectoryData
 from intervenesim.evaluation import evaluate_policies
 from intervenesim.helping import evaluate_help_seeking, summarize_help_seeking
 from intervenesim.policy import train_policy
-from intervenesim.risk import RiskData, RiskTrainConfig, train_risk_model
+from intervenesim.risk import RiskAgent, RiskData, RiskTrainConfig, train_risk_model
 
 ProgressCallback = Callable[[str], None]
 
@@ -134,7 +134,13 @@ def run_research(
 
     risk_checkpoint = checkpoints_dir / "risk_gate.pt"
     if risk_checkpoint.exists():
-        risk_train = {"checkpoint": str(risk_checkpoint), "cached": True}
+        cached_risk = RiskAgent.load(risk_checkpoint, device="cpu")
+        risk_train = {
+            "checkpoint": str(risk_checkpoint),
+            "threshold": cached_risk.threshold,
+            "cached": True,
+            **cached_risk.metadata,
+        }
     else:
         _emit(progress, "training learned intervention gate")
         risk_train = train_risk_model(
@@ -148,6 +154,7 @@ def run_research(
                 weight_decay=config.weight_decay,
                 device=config.device,
                 seed=config.seed,
+                detection_horizon=config.risk_detection_horizon,
             ),
         )
 
@@ -261,14 +268,42 @@ def run_research(
                 progress=progress,
                 task=task,
                 task_conditioning=True,
+                minimum_help_step=config.minimum_help_step,
             )
             help_parts.append(part)
         help_episodes = pd.concat(help_parts, ignore_index=True)
         help_episodes.to_csv(help_path, index=False)
 
+    sweep_path = results_dir / "help_threshold_sweep_episodes.csv"
+    if sweep_path.exists():
+        help_sweep_episodes = pd.read_csv(sweep_path)
+    else:
+        sweep_parts: list[pd.DataFrame] = []
+        for task in config.tasks:
+            for threshold in config.help_thresholds:
+                _emit(progress, f"evaluating help threshold {threshold:.2f} / {task}")
+                part = evaluate_help_seeking(
+                    reference_checkpoint,
+                    risk_checkpoint,
+                    config.disturbances,
+                    config.eval_episodes,
+                    config.seed + 600_000,
+                    config.max_steps,
+                    device=config.device,
+                    task=task,
+                    task_conditioning=True,
+                    minimum_help_step=config.minimum_help_step,
+                    help_modes=("learned_help",),
+                    risk_threshold=threshold,
+                )
+                sweep_parts.append(part)
+        help_sweep_episodes = pd.concat(sweep_parts, ignore_index=True)
+        help_sweep_episodes.to_csv(sweep_path, index=False)
+
     artifacts = write_research_report(
         autonomous,
         help_episodes,
+        help_sweep_episodes,
         results_dir,
         config,
         max_budget,
@@ -347,6 +382,7 @@ def _evaluate_across_tasks(
 def write_research_report(
     autonomous: pd.DataFrame,
     help_episodes: pd.DataFrame,
+    help_sweep_episodes: pd.DataFrame,
     output_dir: Path,
     config: ResearchConfig,
     max_budget: int,
@@ -391,10 +427,12 @@ def write_research_report(
     budget_curve.to_csv(output_dir / "budget_curve.csv", index=False)
     help_summary = summarize_help_seeking(help_episodes)
     help_summary.to_csv(output_dir / "help_summary.csv", index=False)
+    help_sweep = _summarize_threshold_sweep(help_sweep_episodes)
+    help_sweep.to_csv(output_dir / "help_threshold_sweep.csv", index=False)
 
     _plot_final(seed_rates, output_dir / "multiseed_success.png")
     _plot_budget_curve(budget_curve, output_dir / "budget_efficiency.png")
-    _plot_help(help_summary, output_dir / "help_efficiency.png")
+    _plot_help(help_summary, help_sweep, output_dir / "help_efficiency.png")
 
     paired_rows: list[dict[str, object]] = []
     disturbed_rates = seed_rates.loc[seed_rates["disturbed"]].pivot(
@@ -409,7 +447,9 @@ def write_research_report(
     paired = pd.DataFrame(paired_rows)
     paired.to_csv(output_dir / "paired_seed_comparisons.csv", index=False)
 
-    report = _research_markdown(aggregate, paired, help_summary, max_budget, risk_training, config)
+    report = _research_markdown(
+        aggregate, paired, help_summary, help_sweep, max_budget, risk_training, config
+    )
     report_path = output_dir / "report.md"
     report_path.write_text(report, encoding="utf-8")
     return {
@@ -418,6 +458,7 @@ def write_research_report(
         "seed_rates": str(output_dir / "autonomous_seed_rates.csv"),
         "budget_curve": str(output_dir / "budget_curve.csv"),
         "help_summary": str(output_dir / "help_summary.csv"),
+        "help_threshold_sweep": str(output_dir / "help_threshold_sweep.csv"),
         "paired_comparisons": str(output_dir / "paired_seed_comparisons.csv"),
         "multiseed_figure": str(output_dir / "multiseed_success.png"),
         "budget_figure": str(output_dir / "budget_efficiency.png"),
@@ -522,12 +563,36 @@ def _plot_budget_curve(data: pd.DataFrame, path: Path) -> None:
     plt.close(figure)
 
 
-def _plot_help(data: pd.DataFrame, path: Path) -> None:
+def _summarize_threshold_sweep(episodes: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, float | int]] = []
+    for threshold, group in episodes.groupby("risk_threshold"):
+        disturbed = group.loc[group["disturbance"] != "nominal"]
+        nominal = group.loc[group["disturbance"] == "nominal"]
+        rows.append(
+            {
+                "threshold": float(threshold),
+                "disturbed_episodes": int(len(disturbed)),
+                "disturbed_success_rate": float(disturbed["success"].mean()),
+                "disturbed_intervention_rate": float(disturbed["help_requested"].mean()),
+                "nominal_success_rate": float(nominal["success"].mean()),
+                "nominal_intervention_rate": float(nominal["help_requested"].mean()),
+            }
+        )
+    return pd.DataFrame(rows).sort_values("threshold").reset_index(drop=True)
+
+
+def _plot_help(data: pd.DataFrame, sweep: pd.DataFrame, path: Path) -> None:
     disturbed = data.loc[data["disturbance"] != "nominal"]
     aggregate = disturbed.groupby("help_mode", as_index=False).agg(
         success_rate=("success_rate", "mean"),
         intervention_rate=("intervention_rate", "mean"),
     )
+    sweep_points = sweep.rename(
+        columns={
+            "disturbed_success_rate": "success_rate",
+            "disturbed_intervention_rate": "intervention_rate",
+        }
+    ).copy()
     sns.set_theme(style="whitegrid", context="talk")
     figure, axis = plt.subplots(figsize=(9, 6))
     sns.scatterplot(
@@ -538,12 +603,35 @@ def _plot_help(data: pd.DataFrame, path: Path) -> None:
         s=180,
         ax=axis,
     )
+    label_offsets = {
+        "always_help": (-80, -16),
+        "learned_help": (-82, 8),
+        "oracle_help": (-76, 23),
+        "no_help": (7, 6),
+    }
     for row in aggregate.itertuples():
         axis.annotate(
             row.help_mode,
             (row.intervention_rate, row.success_rate),
-            xytext=(7, 6),
+            xytext=label_offsets.get(row.help_mode, (7, 6)),
             textcoords="offset points",
+            fontsize=9,
+        )
+    axis.plot(
+        sweep_points["intervention_rate"],
+        sweep_points["success_rate"],
+        color="#6f42c1",
+        marker="o",
+        linewidth=2,
+        label="threshold sweep",
+    )
+    for row in sweep_points.itertuples():
+        axis.annotate(
+            f"{row.threshold:.2f}",
+            (row.intervention_rate, row.success_rate),
+            xytext=(5, -14),
+            textcoords="offset points",
+            fontsize=9,
         )
     axis.set_xlim(-0.03, 1.03)
     axis.set_ylim(0, 1.03)
@@ -560,6 +648,7 @@ def _research_markdown(
     aggregate: pd.DataFrame,
     paired: pd.DataFrame,
     help_summary: pd.DataFrame,
+    help_sweep: pd.DataFrame,
     max_budget: int,
     risk_training: dict[str, object],
     config: ResearchConfig,
@@ -575,6 +664,7 @@ def _research_markdown(
     table = disturbed[["condition", "success"]].to_markdown(index=False)
     pair_table = paired.copy()
     pair_table["mean_delta"] = pair_table["mean_delta"].map(lambda value: f"{100 * value:+.1f} pp")
+    pair_table["std_delta"] = pair_table["std_delta"].map(lambda value: f"{100 * value:.1f} pp")
     pair_table["sign_permutation_p"] = pair_table["sign_permutation_p"].map(
         lambda value: f"{value:.3g}"
     )
@@ -593,6 +683,16 @@ def _research_markdown(
         success_rate=("success_rate", "mean"), intervention_rate=("intervention_rate", "mean")
     )
     help_table = help_aggregate.map(lambda value: f"{100 * value:.1f}%").to_markdown()
+    sweep_table = help_sweep.copy()
+    sweep_table["threshold"] = sweep_table["threshold"].map(lambda value: f"{value:.2f}")
+    for column in (
+        "disturbed_success_rate",
+        "disturbed_intervention_rate",
+        "nominal_success_rate",
+        "nominal_intervention_rate",
+    ):
+        sweep_table[column] = sweep_table[column].map(lambda value: f"{100 * value:.1f}%")
+    sweep_table = sweep_table.drop(columns=["disturbed_episodes"]).to_markdown(index=False)
     return "\n".join(
         [
             "# InterveneSim-X research report",
@@ -623,6 +723,11 @@ def _research_markdown(
             risk_text,
             "",
             help_table,
+            "",
+            "The validation-selected high-recall threshold is not selective in deployment. "
+            "The following post-audit threshold sweep is exploratory and is reported in full:",
+            "",
+            sweep_table,
             "",
             "## Boundaries",
             "",
