@@ -58,6 +58,74 @@ def record_benchmark_comparison(
     }
 
 
+def record_research_comparison(
+    run_dir: str | Path,
+    output: str | Path,
+    task: str = "cereal",
+    disturbance_name: str = "gripper_slip",
+    training_seed: int = 27,
+    budget: int = 4800,
+    fps: int = 20,
+) -> dict[str, object]:
+    """Record a matched InterveneSim-X baseline failure and recovery-policy success."""
+    run = Path(run_dir)
+    episodes = pd.read_csv(run / "results" / "autonomous_episodes.csv")
+    subset = episodes.loc[
+        (episodes["training_seed"] == training_seed)
+        & (episodes["task"] == task)
+        & (episodes["disturbance"] == disturbance_name)
+        & (episodes["budget"].isin([0, budget]))
+    ]
+    paired = subset.pivot_table(
+        index="seed", columns="condition", values="success", aggfunc="first"
+    )
+    required = {"baseline", "recovery_bc"}
+    if not required.issubset(paired.columns):
+        raise ValueError("research results must contain baseline and recovery_bc conditions")
+    candidates = paired.index[(~paired["baseline"].astype(bool)) & paired["recovery_bc"]]
+    if not len(candidates):
+        raise ValueError("no matched research episode has a baseline failure and recovery success")
+    seed = int(candidates[0])
+    disturbance_seed = seed + 50_000
+    checkpoint_dir = run / "checkpoints" / f"seed-{training_seed}"
+    baseline = _record_rollout(
+        checkpoint_dir / "baseline.pt",
+        disturbance_name,
+        seed,
+        disturbance_seed,
+        task=task,
+        task_conditioning=True,
+    )
+    recovery = _record_rollout(
+        checkpoint_dir / f"recovery-bc-{budget}.pt",
+        disturbance_name,
+        seed,
+        disturbance_seed,
+        task=task,
+        task_conditioning=True,
+    )
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _write_side_by_side(
+        baseline,
+        recovery,
+        destination,
+        f"{task} / {disturbance_name}",
+        seed,
+        fps,
+    )
+    return {
+        "output": str(destination),
+        "task": task,
+        "disturbance": disturbance_name,
+        "seed": seed,
+        "training_seed": training_seed,
+        "budget": budget,
+        "baseline_success": baseline.success,
+        "recovery_success": recovery.success,
+    }
+
+
 def select_comparison_seed(episodes: pd.DataFrame, disturbance_name: str) -> int:
     subset = episodes.loc[episodes["disturbance"] == disturbance_name]
     if subset.empty:
@@ -80,11 +148,18 @@ def _record_rollout(
     seed: int,
     disturbance_seed: int,
     max_steps: int = 260,
+    task: str = "can",
+    task_conditioning: bool = False,
 ) -> VideoRollout:
     policy = PolicyAgent.load(checkpoint)
     disturbance = Disturbance(disturbance_name, disturbance_seed)
     frames: list[np.ndarray] = []
-    with PickPlaceEnv(max_steps=max_steps, offscreen=True) as env:
+    with PickPlaceEnv(
+        max_steps=max_steps,
+        offscreen=True,
+        task=task,
+        task_conditioning=task_conditioning,
+    ) as env:
         disturbance.reset(env.action_dim)
         state = env.reset(seed)
         frames.append(env.capture_frame())

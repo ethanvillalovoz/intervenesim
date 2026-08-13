@@ -1,0 +1,28 @@
+seed: 71
+training_seeds: [71, 72]
+budgets: [100, 200]
+tasks: [can, milk]
+base_episodes_per_task: 3
+extra_episodes_per_task: 2
+recovery_episodes_per_task: 2
+risk_nominal_episodes_per_task: 1
+risk_horizon: 8
+risk_detection_horizon: 3
+minimum_help_step: 5
+help_thresholds: [0.90, 0.97]
+train_epochs: 2
+fine_tune_epochs: 1
+risk_epochs: 2
+eval_episodes: 1
+hidden_dims: [64, 64]
+risk_hidden_dims: [32, 32]
+batch_size: 128
+learning_rate: 0.001
+weight_decay: 0.000001
+contrastive_weight: 0.25
+contrastive_margin: 0.20
+contrastive_min_distance: 0.08
+device: cpu
+max_steps: 260
+disturbances: [nominal, object_shift, action_noise, action_delay, gripper_slip]
+output_dir: artifacts/runs/research-smoke

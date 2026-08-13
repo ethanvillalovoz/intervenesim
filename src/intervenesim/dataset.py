@@ -20,6 +20,9 @@ class TrajectoryData:
     intervention: np.ndarray
     phases: np.ndarray
     metadata: dict[str, Any] = field(default_factory=dict)
+    rejected_actions: np.ndarray | None = None
+    rejection_mask: np.ndarray | None = None
+    tasks: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.observations = np.asarray(self.observations, dtype=np.float32)
@@ -29,6 +32,18 @@ class TrajectoryData:
         self.disturbances = np.asarray(self.disturbances, dtype="U24")
         self.intervention = np.asarray(self.intervention, dtype=np.bool_)
         self.phases = np.asarray(self.phases, dtype=np.int8)
+        if self.rejected_actions is None:
+            self.rejected_actions = np.zeros_like(self.actions, dtype=np.float32)
+        else:
+            self.rejected_actions = np.asarray(self.rejected_actions, dtype=np.float32)
+        if self.rejection_mask is None:
+            self.rejection_mask = np.zeros(len(self.actions), dtype=np.bool_)
+        else:
+            self.rejection_mask = np.asarray(self.rejection_mask, dtype=np.bool_)
+        if self.tasks is None:
+            self.tasks = np.full(len(self.actions), "can", dtype="U16")
+        else:
+            self.tasks = np.asarray(self.tasks, dtype="U16")
         self.validate()
 
     @classmethod
@@ -41,6 +56,9 @@ class TrajectoryData:
             disturbances=np.empty(0, dtype="U24"),
             intervention=np.empty(0, dtype=np.bool_),
             phases=np.empty(0, dtype=np.int8),
+            rejected_actions=np.empty((0, action_dim), dtype=np.float32),
+            rejection_mask=np.empty(0, dtype=np.bool_),
+            tasks=np.empty(0, dtype="U16"),
         )
 
     @property
@@ -70,10 +88,19 @@ class TrajectoryData:
             len(self.disturbances),
             len(self.intervention),
             len(self.phases),
+            len(self.rejected_actions),
+            len(self.rejection_mask),
+            len(self.tasks),
         }
         if len(lengths) != 1:
             raise ValueError(f"dataset arrays have inconsistent lengths: {sorted(lengths)}")
-        if not np.isfinite(self.observations).all() or not np.isfinite(self.actions).all():
+        if self.rejected_actions.shape != self.actions.shape:
+            raise ValueError("rejected_actions must have the same shape as actions")
+        if (
+            not np.isfinite(self.observations).all()
+            or not np.isfinite(self.actions).all()
+            or not np.isfinite(self.rejected_actions).all()
+        ):
             raise ValueError("dataset contains non-finite observations or actions")
 
     def save(self, path: str | Path) -> Path:
@@ -81,7 +108,7 @@ class TrajectoryData:
         output.parent.mkdir(parents=True, exist_ok=True)
         metadata = {
             **self.metadata,
-            "schema_version": 1,
+            "schema_version": 2,
             "sample_count": self.sample_count,
             "episode_count": self.episode_count,
             "observation_dim": self.observation_dim,
@@ -96,6 +123,9 @@ class TrajectoryData:
             disturbances=self.disturbances,
             intervention=self.intervention,
             phases=self.phases,
+            rejected_actions=self.rejected_actions,
+            rejection_mask=self.rejection_mask,
+            tasks=self.tasks,
             metadata=np.asarray(json.dumps(metadata, sort_keys=True)),
         )
         return output
@@ -104,6 +134,21 @@ class TrajectoryData:
     def load(cls, path: str | Path) -> TrajectoryData:
         with np.load(Path(path), allow_pickle=False) as archive:
             metadata = json.loads(str(archive["metadata"].item()))
+            rejected_actions = (
+                archive["rejected_actions"]
+                if "rejected_actions" in archive.files
+                else np.zeros_like(archive["actions"])
+            )
+            rejection_mask = (
+                archive["rejection_mask"]
+                if "rejection_mask" in archive.files
+                else np.zeros(len(archive["actions"]), dtype=np.bool_)
+            )
+            tasks = (
+                archive["tasks"]
+                if "tasks" in archive.files
+                else np.full(len(archive["actions"]), "can", dtype="U16")
+            )
             return cls(
                 observations=archive["observations"],
                 actions=archive["actions"],
@@ -113,6 +158,9 @@ class TrajectoryData:
                 intervention=archive["intervention"],
                 phases=archive["phases"],
                 metadata=metadata,
+                rejected_actions=rejected_actions,
+                rejection_mask=rejection_mask,
+                tasks=tasks,
             )
 
     def sample_budget(self, count: int, seed: int) -> TrajectoryData:
@@ -124,6 +172,39 @@ class TrajectoryData:
         indices = np.sort(rng.choice(self.sample_count, size=count, replace=False))
         return self.take(indices, metadata={**self.metadata, "sample_budget": count})
 
+    def stratified_sample_budget(
+        self,
+        count: int,
+        seed: int,
+        by: tuple[str, ...] = ("tasks", "disturbances"),
+    ) -> TrajectoryData:
+        if count >= self.sample_count:
+            return self
+        if count < 0:
+            raise ValueError("sample budget must be non-negative")
+        columns = [np.asarray(getattr(self, name)) for name in by]
+        keys = np.asarray(["|".join(values) for values in zip(*columns, strict=True)])
+        groups = [np.flatnonzero(keys == key) for key in np.unique(keys)]
+        rng = np.random.default_rng(seed)
+        for group in groups:
+            rng.shuffle(group)
+        selected: list[int] = []
+        cursors = np.zeros(len(groups), dtype=int)
+        while len(selected) < count:
+            progressed = False
+            for group_index, group in enumerate(groups):
+                if cursors[group_index] < len(group) and len(selected) < count:
+                    selected.append(int(group[cursors[group_index]]))
+                    cursors[group_index] += 1
+                    progressed = True
+            if not progressed:
+                break
+        indices = np.sort(np.asarray(selected, dtype=int))
+        return self.take(
+            indices,
+            metadata={**self.metadata, "sample_budget": count, "stratified_by": list(by)},
+        )
+
     def take(self, indices: np.ndarray, metadata: dict[str, Any] | None = None) -> TrajectoryData:
         return TrajectoryData(
             observations=self.observations[indices],
@@ -134,6 +215,9 @@ class TrajectoryData:
             intervention=self.intervention[indices],
             phases=self.phases[indices],
             metadata=metadata or dict(self.metadata),
+            rejected_actions=self.rejected_actions[indices],
+            rejection_mask=self.rejection_mask[indices],
+            tasks=self.tasks[indices],
         )
 
     @classmethod
@@ -164,10 +248,13 @@ class TrajectoryData:
             intervention=np.concatenate([p.intervention for p in parts]),
             phases=np.concatenate([p.phases for p in parts]),
             metadata=metadata or {},
+            rejected_actions=np.concatenate([p.rejected_actions for p in parts]),
+            rejection_mask=np.concatenate([p.rejection_mask for p in parts]),
+            tasks=np.concatenate([p.tasks for p in parts]),
         )
 
 
-class BehaviorCloningDataset(Dataset[tuple[np.ndarray, np.ndarray]]):
+class BehaviorCloningDataset(Dataset[tuple[np.ndarray, np.ndarray, np.ndarray, np.bool_, np.int8]]):
     def __init__(self, data: TrajectoryData, indices: np.ndarray | None = None) -> None:
         self.data = data
         self.indices = np.arange(data.sample_count) if indices is None else np.asarray(indices)
@@ -175,9 +262,17 @@ class BehaviorCloningDataset(Dataset[tuple[np.ndarray, np.ndarray]]):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray]:
+    def __getitem__(
+        self, index: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.bool_, np.int8]:
         row = self.indices[index]
-        return self.data.observations[row], self.data.actions[row]
+        return (
+            self.data.observations[row],
+            self.data.actions[row],
+            self.data.rejected_actions[row],
+            self.data.rejection_mask[row],
+            self.data.phases[row],
+        )
 
 
 class TrajectoryBuilder:
@@ -189,6 +284,9 @@ class TrajectoryBuilder:
         self.disturbances: list[str] = []
         self.intervention: list[bool] = []
         self.phases: list[int] = []
+        self.rejected_actions: list[np.ndarray] = []
+        self.rejection_mask: list[bool] = []
+        self.tasks: list[str] = []
 
     def append(
         self,
@@ -199,6 +297,8 @@ class TrajectoryBuilder:
         disturbance: str,
         intervention: bool,
         phase: int,
+        rejected_action: np.ndarray | None = None,
+        task: str = "can",
     ) -> None:
         self.observations.append(np.asarray(observation, dtype=np.float32).copy())
         self.actions.append(np.asarray(action, dtype=np.float32).copy())
@@ -207,6 +307,13 @@ class TrajectoryBuilder:
         self.disturbances.append(disturbance)
         self.intervention.append(intervention)
         self.phases.append(phase)
+        self.rejected_actions.append(
+            np.zeros_like(action, dtype=np.float32)
+            if rejected_action is None
+            else np.asarray(rejected_action, dtype=np.float32).copy()
+        )
+        self.rejection_mask.append(rejected_action is not None)
+        self.tasks.append(task)
 
     def extend(self, other: TrajectoryBuilder) -> None:
         self.observations.extend(other.observations)
@@ -216,6 +323,9 @@ class TrajectoryBuilder:
         self.disturbances.extend(other.disturbances)
         self.intervention.extend(other.intervention)
         self.phases.extend(other.phases)
+        self.rejected_actions.extend(other.rejected_actions)
+        self.rejection_mask.extend(other.rejection_mask)
+        self.tasks.extend(other.tasks)
 
     def build(
         self,
@@ -234,4 +344,7 @@ class TrajectoryBuilder:
             intervention=np.asarray(self.intervention),
             phases=np.asarray(self.phases),
             metadata=metadata,
+            rejected_actions=np.stack(self.rejected_actions),
+            rejection_mask=np.asarray(self.rejection_mask),
+            tasks=np.asarray(self.tasks),
         )

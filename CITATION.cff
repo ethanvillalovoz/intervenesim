@@ -1,12 +1,20 @@
 cff-version: 1.2.0
-message: "If you use InterveneSim, please cite this software."
-title: "InterveneSim: Intervention-Guided Recovery for Simulated Robot Manipulation"
+message: "If you use InterveneSim-X, please cite this software and technical report."
+title: "InterveneSim-X: What Should a Robot Learn From a Correction?"
 type: software
 authors:
   - family-names: Villalovoz
     given-names: Ethan
 repository-code: "https://github.com/ethanvillalovoz/intervenesim"
 license: Apache-2.0
-version: 0.1.0
+version: 0.2.0
 date-released: 2026-08-12
-
+abstract: >-
+  A reproducible, equal-label-budget study of corrective interventions, rejected actions,
+  and learned help seeking across four simulated manipulation domains.
+keywords:
+  - imitation learning
+  - interactive imitation learning
+  - robot learning
+  - corrective interventions
+  - simulation

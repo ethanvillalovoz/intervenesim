@@ -1,0 +1,55 @@
+seed: 27
+training_seeds:
+- 27
+- 127
+- 227
+- 327
+- 427
+budgets:
+- 500
+- 1500
+- 3000
+- 4800
+tasks:
+- can
+- milk
+- bread
+- cereal
+base_episodes_per_task: 30
+extra_episodes_per_task: 12
+recovery_episodes_per_task: 18
+risk_nominal_episodes_per_task: 6
+risk_horizon: 16
+risk_detection_horizon: 3
+minimum_help_step: 5
+help_thresholds:
+- 0.9
+- 0.95
+- 0.97
+- 0.99
+train_epochs: 80
+fine_tune_epochs: 35
+risk_epochs: 50
+eval_episodes: 8
+hidden_dims:
+- 256
+- 256
+- 128
+risk_hidden_dims:
+- 128
+- 128
+batch_size: 512
+learning_rate: 0.0003
+weight_decay: 1.0e-06
+contrastive_weight: 0.25
+contrastive_margin: 0.2
+contrastive_min_distance: 0.08
+device: auto
+max_steps: 260
+disturbances:
+- nominal
+- object_shift
+- action_noise
+- action_delay
+- gripper_slip
+output_dir: artifacts/runs/research-v1

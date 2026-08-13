@@ -6,10 +6,11 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+tmp/
 artifacts/datasets/
 artifacts/checkpoints/
 artifacts/runs/
 artifacts/videos/*.mp4
 artifacts/videos/*.gif
+artifacts/videos/*.png
 !artifacts/**/.gitkeep
-

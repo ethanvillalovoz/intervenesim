@@ -73,7 +73,7 @@ class Disturbance:
             position = state.can_pos.copy()
             position[0] = np.clip(position[0] + float(self.parameters["dx"]), -0.18, 0.24)
             position[1] = np.clip(position[1] + float(self.parameters["dy"]), -0.43, -0.10)
-            position[2] = 0.86
+            position[2] = env.object_rest_z
             env.teleport_can(position)
             self._fire(step)
             return env.task_state()
@@ -81,7 +81,7 @@ class Disturbance:
             position = state.can_pos.copy()
             position[0] = np.clip(position[0] + float(self.parameters["dx"]), -0.18, 0.24)
             position[1] = np.clip(position[1] + float(self.parameters["dy"]), -0.43, 0.18)
-            position[2] = 0.88
+            position[2] = env.object_rest_z + 0.02
             env.teleport_can(position)
             self._fire(step)
             return env.task_state()

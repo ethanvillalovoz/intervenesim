@@ -18,9 +18,11 @@ def evaluate_policies(
     max_steps: int,
     device: str = "auto",
     progress: Callable[[str], None] | None = None,
+    task: str = "can",
+    task_conditioning: bool = False,
 ) -> pd.DataFrame:
     records: list[dict[str, object]] = []
-    with PickPlaceEnv(max_steps=max_steps) as env:
+    with PickPlaceEnv(max_steps=max_steps, task=task, task_conditioning=task_conditioning) as env:
         for condition, checkpoint in checkpoints.items():
             policy = PolicyAgent.load(checkpoint, device=device)
             for disturbance_name in disturbances:
@@ -42,6 +44,7 @@ def evaluate_policies(
                     records.append(
                         {
                             "condition": condition,
+                            "task": task,
                             "disturbance": disturbance_name,
                             "episode": episode,
                             "seed": episode_seed,

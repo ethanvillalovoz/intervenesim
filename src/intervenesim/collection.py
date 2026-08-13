@@ -7,9 +7,11 @@ import numpy as np
 
 from intervenesim.dataset import TrajectoryBuilder, TrajectoryData
 from intervenesim.disturbances import DISTURBANCE_NAMES, Disturbance
-from intervenesim.environment import PickPlaceEnv, TaskState
+from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
 from intervenesim.policy import PolicyAgent
+from intervenesim.risk import RiskBuilder, RiskData
+from intervenesim.supervision import InterventionSupervisor
 
 ProgressCallback = Callable[[str], None]
 
@@ -34,19 +36,28 @@ class CollectionSummary:
         }
 
 
+@dataclass(frozen=True)
+class RecoveryCollection:
+    demonstrations: TrajectoryData
+    risk_data: RiskData
+    summary: CollectionSummary
+
+
 def collect_clean_demonstrations(
     episodes: int,
     seed: int,
     max_steps: int,
     attempt_multiplier: int = 3,
     progress: ProgressCallback | None = None,
+    task: str = "can",
+    task_conditioning: bool = False,
 ) -> tuple[TrajectoryData, CollectionSummary]:
     if episodes <= 0:
         raise ValueError("episodes must be positive")
     builder = TrajectoryBuilder()
     successful = 0
     attempts = 0
-    with PickPlaceEnv(max_steps=max_steps) as env:
+    with PickPlaceEnv(max_steps=max_steps, task=task, task_conditioning=task_conditioning) as env:
         while successful < episodes and attempts < episodes * attempt_multiplier:
             episode_seed = seed + attempts
             state = env.reset(episode_seed)
@@ -64,6 +75,7 @@ def collect_clean_demonstrations(
                     disturbance="nominal",
                     intervention=False,
                     phase=phase,
+                    task=task,
                 )
                 state, _, done, info = env.step(action)
                 if done:
@@ -87,7 +99,13 @@ def collect_clean_demonstrations(
     data = builder.build(
         observation_dim=env.observation_dim,
         action_dim=env.action_dim,
-        metadata={"kind": "clean", "seed": seed, "collection": summary.to_dict()},
+        metadata={
+            "kind": "clean",
+            "seed": seed,
+            "task": task,
+            "task_conditioning": task_conditioning,
+            "collection": summary.to_dict(),
+        },
     )
     return data, summary
 
@@ -100,15 +118,47 @@ def collect_recovery_demonstrations(
     attempt_multiplier: int = 4,
     disturbance_names: tuple[str, ...] | None = None,
     progress: ProgressCallback | None = None,
+    task: str = "can",
+    task_conditioning: bool = False,
 ) -> tuple[TrajectoryData, CollectionSummary]:
+    bundle = collect_recovery_bundle(
+        policy,
+        episodes,
+        seed,
+        max_steps,
+        attempt_multiplier,
+        disturbance_names,
+        risk_horizon=16,
+        nominal_risk_episodes=0,
+        progress=progress,
+        task=task,
+        task_conditioning=task_conditioning,
+    )
+    return bundle.demonstrations, bundle.summary
+
+
+def collect_recovery_bundle(
+    policy: PolicyAgent,
+    episodes: int,
+    seed: int,
+    max_steps: int,
+    attempt_multiplier: int = 4,
+    disturbance_names: tuple[str, ...] | None = None,
+    risk_horizon: int = 16,
+    nominal_risk_episodes: int = 0,
+    progress: ProgressCallback | None = None,
+    task: str = "can",
+    task_conditioning: bool = False,
+) -> RecoveryCollection:
     names = disturbance_names or tuple(name for name in DISTURBANCE_NAMES if name != "nominal")
     if not names or any(name == "nominal" for name in names):
         raise ValueError("recovery collection requires one or more non-nominal disturbances")
     builder = TrajectoryBuilder()
+    risk_builder = RiskBuilder()
     successful = 0
     attempts = 0
     counts = {name: 0 for name in names}
-    with PickPlaceEnv(max_steps=max_steps) as env:
+    with PickPlaceEnv(max_steps=max_steps, task=task, task_conditioning=task_conditioning) as env:
         while successful < episodes and attempts < episodes * attempt_multiplier:
             disturbance_name = names[attempts % len(names)]
             episode_seed = seed + attempts
@@ -116,26 +166,23 @@ def collect_recovery_demonstrations(
             disturbance.reset(env.action_dim)
             state = env.reset(episode_seed)
             expert = ScriptedExpert()
+            supervisor = InterventionSupervisor()
+            supervisor.reset(state)
             intervening = False
+            intervention_index: int | None = None
             episode = TrajectoryBuilder()
-            last_progress = _progress_score(state)
-            stalled_steps = 0
+            risk_observations: list[np.ndarray] = []
             for step in range(max_steps):
                 state = disturbance.before_step(env, state, step)
-                progress_score = _progress_score(state)
-                if progress_score <= last_progress + 1e-4:
-                    stalled_steps += 1
-                else:
-                    stalled_steps = 0
-                    last_progress = progress_score
-                disturbance_ready = (
-                    disturbance.fired and step >= (disturbance.trigger_step or 0) + 2
-                )
-                if not intervening and (disturbance_ready or stalled_steps >= 45 or step >= 130):
+                if not intervening:
+                    risk_observations.append(state.observation.copy())
+                if not intervening and supervisor.should_intervene(state, disturbance, step):
                     intervening = True
+                    intervention_index = len(risk_observations) - 1
                     expert.reset(state, recovering=True)
                 if intervening:
                     phase = int(expert.phase)
+                    rejected_action = policy.action(state.observation)
                     action = expert.action(state)
                     episode.append(
                         state.observation,
@@ -145,6 +192,8 @@ def collect_recovery_demonstrations(
                         disturbance=disturbance_name,
                         intervention=True,
                         phase=phase,
+                        rejected_action=rejected_action,
+                        task=task,
                     )
                 else:
                     action = policy.action(state.observation)
@@ -157,12 +206,42 @@ def collect_recovery_demonstrations(
                 if done:
                     break
             attempts += 1
+            risk_builder.append_episode(
+                risk_observations,
+                intervention_index,
+                risk_horizon,
+                attempts - 1,
+                disturbance_name,
+            )
             if info["success"] and episode.observations:
                 builder.extend(episode)
                 successful += 1
                 counts[disturbance_name] += 1
                 if progress:
                     progress(f"recovery demonstration {successful}/{episodes} ({disturbance_name})")
+        nominal_successful = 0
+        nominal_attempts = 0
+        while (
+            nominal_successful < nominal_risk_episodes
+            and nominal_attempts < nominal_risk_episodes * attempt_multiplier
+        ):
+            state = env.reset(seed + 500_000 + nominal_attempts)
+            observations: list[np.ndarray] = []
+            for _ in range(max_steps):
+                observations.append(state.observation.copy())
+                state, _, done, info = env.step(policy.action(state.observation))
+                if done:
+                    break
+            nominal_attempts += 1
+            if info["success"]:
+                risk_builder.append_episode(
+                    observations,
+                    intervention_index=None,
+                    horizon=risk_horizon,
+                    episode_id=attempts + nominal_successful,
+                    disturbance="nominal",
+                )
+                nominal_successful += 1
     if successful < episodes:
         raise RuntimeError(f"expert recovered only {successful}/{episodes} requested episodes")
     summary = CollectionSummary(
@@ -176,17 +255,23 @@ def collect_recovery_demonstrations(
     data = builder.build(
         observation_dim=env.observation_dim,
         action_dim=env.action_dim,
-        metadata={"kind": "recovery", "seed": seed, "collection": summary.to_dict()},
+        metadata={
+            "kind": "recovery",
+            "seed": seed,
+            "task": task,
+            "task_conditioning": task_conditioning,
+            "collection": summary.to_dict(),
+        },
     )
-    return data, summary
-
-
-def _progress_score(state: TaskState) -> float:
-    eef_to_can = float(np.linalg.norm(state.eef_pos - state.can_pos))
-    can_to_goal = float(np.linalg.norm(state.can_pos[:2] - state.goal_pos[:2]))
-    score = -0.2 * eef_to_can
-    if state.can_lifted:
-        score += 1.0 - can_to_goal
-    if state.near_goal:
-        score += 1.0
-    return score
+    risk_data = risk_builder.build(
+        observation_dim=env.observation_dim,
+        metadata={
+            "kind": "intervention_risk",
+            "seed": seed,
+            "horizon": risk_horizon,
+            "nominal_episodes": nominal_risk_episodes,
+            "task": task,
+            "task_conditioning": task_conditioning,
+        },
+    )
+    return RecoveryCollection(data, risk_data, summary)

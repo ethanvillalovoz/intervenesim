@@ -16,18 +16,75 @@ from intervenesim.dataset import BehaviorCloningDataset, TrajectoryData
 
 
 class MLPPolicy(nn.Module):
-    def __init__(self, observation_dim: int, action_dim: int, hidden_dims: tuple[int, ...]) -> None:
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        hidden_dims: tuple[int, ...],
+        task_head_count: int = 1,
+        phase_count: int = 1,
+    ) -> None:
         super().__init__()
         layers: list[nn.Module] = []
         width = observation_dim
         for hidden in hidden_dims:
             layers.extend([nn.Linear(width, hidden), nn.LayerNorm(hidden), nn.SiLU()])
             width = hidden
-        layers.extend([nn.Linear(width, action_dim), nn.Tanh()])
-        self.network = nn.Sequential(*layers)
+        self.task_head_count = task_head_count
+        self.phase_count = phase_count
+        if task_head_count == 1 and phase_count == 1:
+            layers.extend([nn.Linear(width, action_dim), nn.Tanh()])
+            self.network = nn.Sequential(*layers)
+            self.trunk = None
+            self.heads = None
+            self.phase_classifier = None
+        else:
+            self.network = None
+            self.trunk = nn.Sequential(*layers)
+            self.heads = nn.ModuleList(
+                [
+                    nn.Sequential(nn.Linear(width, action_dim), nn.Tanh())
+                    for _ in range(task_head_count * phase_count)
+                ]
+            )
+            self.phase_classifier = nn.Linear(width, phase_count) if phase_count > 1 else None
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
-        return self.network(observation)
+        actions, _ = self.forward_for_training(observation)
+        return actions
+
+    def forward_for_training(
+        self,
+        observation: torch.Tensor,
+        phase_indices: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        if self.task_head_count == 1 and self.phase_count == 1:
+            assert self.network is not None
+            return self.network(observation), None
+        assert self.trunk is not None and self.heads is not None
+        features = self.trunk(observation)
+        candidates = torch.stack([head(features) for head in self.heads], dim=1)
+        # Task one-hot values occupy the final input dimensions. Standardization preserves
+        # their argmax, allowing deterministic routing while the shared trunk still sees
+        # object geometry and task identity.
+        if self.task_head_count > 1:
+            task_indices = torch.argmax(observation[:, -self.task_head_count :], dim=-1)
+        else:
+            task_indices = torch.zeros(
+                len(observation), dtype=torch.long, device=observation.device
+            )
+        phase_logits = (
+            self.phase_classifier(features) if self.phase_classifier is not None else None
+        )
+        if phase_indices is None:
+            phase_indices = (
+                torch.argmax(phase_logits, dim=-1)
+                if phase_logits is not None
+                else torch.zeros(len(observation), dtype=torch.long, device=observation.device)
+            )
+        head_indices = task_indices * self.phase_count + phase_indices
+        rows = torch.arange(len(observation), device=observation.device)
+        return candidates[rows, head_indices], phase_logits
 
 
 @dataclass(frozen=True)
@@ -78,6 +135,8 @@ class PolicyAgent:
             checkpoint["observation_dim"],
             checkpoint["action_dim"],
             tuple(checkpoint["hidden_dims"]),
+            int(checkpoint.get("task_head_count", 1)),
+            int(checkpoint.get("phase_count", 1)),
         )
         model.load_state_dict(checkpoint["model"])
         normalizer = Normalizer(
@@ -137,8 +196,19 @@ def train_policy(
         intervention=data.intervention,
         phases=data.phases,
         metadata=data.metadata,
+        rejected_actions=data.rejected_actions,
+        rejection_mask=data.rejection_mask,
+        tasks=data.tasks,
     )
-    model = MLPPolicy(data.observation_dim, data.action_dim, config.hidden_dims).to(device)
+    task_head_count = len(np.unique(data.tasks))
+    phase_count = int(data.phases.max()) + 1
+    model = MLPPolicy(
+        data.observation_dim,
+        data.action_dim,
+        config.hidden_dims,
+        task_head_count=task_head_count,
+        phase_count=phase_count,
+    ).to(device)
     if initial is not None:
         model.load_state_dict(initial["model"])
     train_loader = DataLoader(
@@ -152,25 +222,57 @@ def train_policy(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
     criterion = nn.MSELoss()
+    contrastive_weight = float(config.extra.get("contrastive_weight", 0.0))
+    contrastive_margin = float(config.extra.get("contrastive_margin", 0.2))
+    contrastive_min_distance = float(config.extra.get("contrastive_min_distance", 0.08))
+    phase_weight = float(config.extra.get("phase_weight", 0.1 if phase_count > 1 else 0.0))
     history: list[dict[str, float | int]] = []
     best_state: dict[str, torch.Tensor] | None = None
     best_validation = float("inf")
     for epoch in range(config.epochs):
         model.train()
         losses: list[float] = []
-        for observations, actions in train_loader:
+        contrastive_losses: list[float] = []
+        phase_losses: list[float] = []
+        for observations, actions, rejected_actions, rejection_mask, phases in train_loader:
             observations = observations.to(device=device, dtype=torch.float32)
             actions = actions.to(device=device, dtype=torch.float32)
+            rejected_actions = rejected_actions.to(device=device, dtype=torch.float32)
+            rejection_mask = rejection_mask.to(device=device, dtype=torch.bool)
+            phases = phases.to(device=device, dtype=torch.long)
             optimizer.zero_grad(set_to_none=True)
-            loss = criterion(model(observations), actions)
+            predictions, phase_logits = model.forward_for_training(observations, phases)
+            imitation_loss = criterion(predictions, actions)
+            phase_loss = (
+                nn.functional.cross_entropy(phase_logits, phases)
+                if phase_logits is not None
+                else predictions.sum() * 0.0
+            )
+            correction_loss = contrastive_correction_loss(
+                predictions,
+                actions,
+                rejected_actions,
+                rejection_mask,
+                margin=contrastive_margin,
+                min_distance=contrastive_min_distance,
+            )
+            loss = imitation_loss + contrastive_weight * correction_loss + phase_weight * phase_loss
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             losses.append(float(loss.detach().cpu()))
+            contrastive_losses.append(float(correction_loss.detach().cpu()))
+            phase_losses.append(float(phase_loss.detach().cpu()))
         validation = _validation_loss(model, normalized_data, validation_indices, device)
         train_loss = float(np.mean(losses))
         history.append(
-            {"epoch": epoch + 1, "train_loss": train_loss, "validation_loss": validation}
+            {
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "contrastive_loss": float(np.mean(contrastive_losses)),
+                "phase_loss": float(np.mean(phase_losses)),
+                "validation_loss": validation,
+            }
         )
         score = validation if np.isfinite(validation) else train_loss
         if score < best_validation:
@@ -192,6 +294,16 @@ def train_policy(
             str(key): int(value)
             for key, value in zip(*np.unique(data.sources, return_counts=True), strict=True)
         },
+        "tasks": {
+            str(key): int(value)
+            for key, value in zip(*np.unique(data.tasks, return_counts=True), strict=True)
+        },
+        "rejected_sample_count": int(data.rejection_mask.sum()),
+        "contrastive_weight": contrastive_weight,
+        "contrastive_margin": contrastive_margin,
+        "contrastive_min_distance": contrastive_min_distance,
+        "phase_count": phase_count,
+        "phase_weight": phase_weight,
     }
     torch.save(
         {
@@ -199,6 +311,8 @@ def train_policy(
             "observation_dim": data.observation_dim,
             "action_dim": data.action_dim,
             "hidden_dims": list(config.hidden_dims),
+            "task_head_count": task_head_count,
+            "phase_count": phase_count,
             "normalizer_mean": normalizer.mean,
             "normalizer_std": normalizer.std,
             "metadata": metadata,
@@ -213,6 +327,25 @@ def train_policy(
         "best_validation_loss": best_validation,
         **metadata,
     }
+
+
+def contrastive_correction_loss(
+    predictions: torch.Tensor,
+    corrections: torch.Tensor,
+    rejected_actions: torch.Tensor,
+    rejection_mask: torch.Tensor,
+    margin: float,
+    min_distance: float,
+) -> torch.Tensor:
+    """Margin loss that ranks a correction closer than the rejected robot action."""
+    correction_distance = torch.mean((predictions - corrections) ** 2, dim=-1)
+    rejected_distance = torch.mean((predictions - rejected_actions) ** 2, dim=-1)
+    pair_distance = torch.sqrt(torch.sum((corrections - rejected_actions) ** 2, dim=-1))
+    eligible = rejection_mask & (pair_distance >= min_distance)
+    if not torch.any(eligible):
+        return predictions.sum() * 0.0
+    ranking = torch.relu(margin + correction_distance - rejected_distance)
+    return ranking[eligible].mean()
 
 
 @torch.inference_mode()

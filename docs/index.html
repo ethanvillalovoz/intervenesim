@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="InterveneSim-X: a reproducible study of what robots should learn from corrective interventions.">
+  <meta property="og:title" content="InterveneSim-X — What Should a Robot Learn From a Correction?">
+  <meta property="og:description" content="Five seeds, four objects, four disturbances, equal label budgets, and honest negative results — all on Apple Silicon.">
+  <meta property="og:image" content="assets/comparison-preview.png">
+  <title>InterveneSim-X — What Should a Robot Learn From a Correction?</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="InterveneSim-X home">INTERVENE<span>SIM-X</span></a>
+    <nav aria-label="Primary navigation">
+      <a href="#result">Results</a>
+      <a href="#method">Method</a>
+      <a href="#findings">Findings</a>
+      <a href="intervenesim-x-report.pdf">Paper</a>
+      <a class="nav-button" href="https://github.com/ethanvillalovoz/intervenesim">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="eyebrow">INTERACTIVE IMITATION LEARNING · REPRODUCIBLE ON APPLE SILICON</div>
+      <h1>What should a robot learn<br>from a <em>correction?</em></h1>
+      <p class="lede">A controlled simulation study asks whether corrective actions teach more than
+        the same number of clean labels—and reports the failed ideas, too.</p>
+      <div class="actions">
+        <a class="primary" href="intervenesim-x-report.pdf">Read the technical report</a>
+        <a class="secondary" href="https://github.com/ethanvillalovoz/intervenesim">Explore the code ↗</a>
+      </div>
+      <div class="metrics" aria-label="Headline results">
+        <div><strong>+22.8 pp</strong><span>recovery vs. clean labels</span></div>
+        <div><strong>5 / 5</strong><span>independent seed wins</span></div>
+        <div><strong>4 × 4</strong><span>objects × disturbances</span></div>
+        <div><strong>$0</strong><span>cloud and hardware cost</span></div>
+      </div>
+    </section>
+
+    <section class="video-section" aria-labelledby="video-title">
+      <div class="section-label">MATCHED ROLLOUT</div>
+      <h2 id="video-title">Same seed. Same slip. Different outcome.</h2>
+      <p>The baseline and recovery-trained policies face the identical cereal gripper-slip
+        episode. The baseline times out; the correction-trained policy reacquires and places the object.</p>
+      <video controls muted playsinline poster="assets/comparison-preview.png">
+        <source src="assets/intervenesim-x-cereal-slip.mp4" type="video/mp4">
+        Your browser does not support the comparison video.
+      </video>
+    </section>
+
+    <section class="result" id="result" aria-labelledby="result-title">
+      <div class="copy">
+        <div class="section-label">PRIMARY RESULT</div>
+        <h2 id="result-title">Corrections beat more demonstrations.</h2>
+        <p>At an equal budget of 4,800 added action labels, ordinary behavior cloning on recovery
+          corrections reaches <strong>61.4% disturbed success</strong>. Additional clean labels reach
+          38.6%. The gain is positive for every independently trained policy.</p>
+        <ul>
+          <li>Hierarchical 95% interval: 56.6–65.9%</li>
+          <li>Five policy-training seeds with matched evaluation seeds</li>
+          <li>Can, milk, bread, and cereal manipulation domains</li>
+          <li>Object shift, action noise, delay, and gripper slip</li>
+        </ul>
+      </div>
+      <figure>
+        <img src="assets/multiseed_success.png" alt="Bar chart of disturbed success for baseline, contrastive recovery, more demos, and recovery behavior cloning across five training seeds.">
+        <figcaption>Points are independent training seeds; bars show mean and standard deviation.</figcaption>
+      </figure>
+    </section>
+
+    <section class="method" id="method" aria-labelledby="method-title">
+      <div class="section-label">EXPERIMENTAL CONTROL</div>
+      <h2 id="method-title">Change what the labels cover—not how many labels exist.</h2>
+      <div class="pipeline">
+        <div class="stage"><b>01</b><h3>Imitate</h3><p>Train a multi-domain behavior-cloned policy on clean expert demonstrations.</p></div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="stage"><b>02</b><h3>Disturb</h3><p>Roll it out under four controlled failure families on its own state distribution.</p></div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="stage"><b>03</b><h3>Correct</h3><p>Record expert recovery actions and the robot actions rejected at takeover.</p></div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="stage"><b>04</b><h3>Compare</h3><p>Retrain with identical added-label budgets and matched deployment episodes.</p></div>
+      </div>
+    </section>
+
+    <section class="findings" id="findings" aria-labelledby="findings-title">
+      <div class="section-label">THE USEFUL FAILURES</div>
+      <h2 id="findings-title">A strong project should tell you what did not work.</h2>
+      <div class="finding-grid">
+        <article>
+          <span>NEGATIVE RESULT 01</span>
+          <h3>Rejected-action contrast hurts.</h3>
+          <p>Pushing predictions away from the action rejected at intervention sounds principled.
+            It falls 22.0 points below ordinary recovery cloning and loses on all five seeds.</p>
+        </article>
+        <article>
+          <span>NEGATIVE RESULT 02</span>
+          <h3>Offline AUROC is not deployment selectivity.</h3>
+          <p>The temporal risk model reaches 0.919 held-out AUROC, yet its high-recall operating
+            point asks for help almost everywhere. The deployed frontier is the metric that matters.</p>
+        </article>
+      </div>
+      <div class="help-grid">
+        <figure>
+          <img src="assets/help_efficiency.png" alt="Scatter plot of assisted task success versus intervention rate, including a risk-threshold sweep.">
+        </figure>
+        <div>
+          <div class="section-label">EXPLORATORY OPERATING POINT</div>
+          <h3>75.8% success with 3.1% nominal false alarms.</h3>
+          <p>At threshold 0.97, the detector requests expert control on 64.8% of disturbed episodes
+            and 3.1% of nominal ones. This sweep followed the calibration audit, so it is explicitly
+            labeled exploratory.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="reproduce" aria-labelledby="reproduce-title">
+      <div>
+        <div class="section-label">RUN IT YOURSELF</div>
+        <h2 id="reproduce-title">The full chain is inspectable.</h2>
+        <p>Simulator, data collection, paired rejected actions, models, checkpoint resumption,
+          statistical analysis, raw episode records, tests, figures, and video are in one repository.</p>
+      </div>
+      <pre><code>git clone https://github.com/ethanvillalovoz/intervenesim.git
+cd intervenesim
+uv sync --locked --extra dev
+uv run intervenesim smoke
+uv run intervenesim research --config configs/research.yaml</code></pre>
+    </section>
+
+    <section class="boundaries">
+      <h2>Claim the evidence you have.</h2>
+      <p>This is a state-based, scripted-supervision simulation study. It does not establish visual
+        robustness, human correction quality, robot safety, or sim-to-real transfer. Those limits are
+        part of the artifact, not footnotes to hide.</p>
+    </section>
+  </main>
+
+  <footer>
+    <div><b>InterveneSim-X</b><br><span>Built by Ethan Villalovoz · 2026</span></div>
+    <div><a href="intervenesim-x-report.pdf">Technical report</a><a href="https://github.com/ethanvillalovoz/intervenesim">Source code</a><a href="intervenesim-x.md">Protocol</a></div>
+  </footer>
+</body>
+</html>
