@@ -1,0 +1,5 @@
+threshold,disturbed_episodes,disturbed_success_rate,disturbed_intervention_rate,nominal_success_rate,nominal_intervention_rate
+0.9,128,0.8984375,0.875,1.0,0.28125
+0.95,128,0.796875,0.75,0.96875,0.15625
+0.97,128,0.7578125,0.6484375,0.96875,0.03125
+0.99,128,0.546875,0.2265625,0.96875,0.0

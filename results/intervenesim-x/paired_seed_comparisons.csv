@@ -1,0 +1,4 @@
+challenger,reference,training_seeds,mean_delta,std_delta,positive_seeds,sign_permutation_p
+recovery_bc,more_demos,5,0.228125,0.042576333104495975,5,0.0625
+contrastive_recovery,recovery_bc,5,-0.2203125,0.09446343125119899,0,0.0625
+contrastive_recovery,more_demos,5,0.0078125,0.05660694041480249,2,0.8125

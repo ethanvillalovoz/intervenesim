@@ -1,0 +1,14 @@
+condition,budget,success_rate
+baseline,0,0.3828125
+contrastive_recovery,500,0.3515625
+contrastive_recovery,1500,0.3984375
+contrastive_recovery,3000,0.3828125
+contrastive_recovery,4800,0.4375
+more_demos,500,0.421875
+more_demos,1500,0.390625
+more_demos,3000,0.4453125
+more_demos,4800,0.3984375
+recovery_bc,500,0.484375
+recovery_bc,1500,0.5703125
+recovery_bc,3000,0.640625
+recovery_bc,4800,0.609375

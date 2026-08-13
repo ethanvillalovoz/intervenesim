@@ -1,0 +1,157 @@
+{
+  "artifacts": {
+    "autonomous_summary": "artifacts/runs/research-v1/results/autonomous_summary.csv",
+    "budget_curve": "artifacts/runs/research-v1/results/budget_curve.csv",
+    "budget_figure": "artifacts/runs/research-v1/results/budget_efficiency.png",
+    "help_figure": "artifacts/runs/research-v1/results/help_efficiency.png",
+    "help_summary": "artifacts/runs/research-v1/results/help_summary.csv",
+    "help_threshold_sweep": "artifacts/runs/research-v1/results/help_threshold_sweep.csv",
+    "multiseed_figure": "artifacts/runs/research-v1/results/multiseed_success.png",
+    "paired_comparisons": "artifacts/runs/research-v1/results/paired_seed_comparisons.csv",
+    "report": "artifacts/runs/research-v1/results/report.md",
+    "seed_rates": "artifacts/runs/research-v1/results/autonomous_seed_rates.csv"
+  },
+  "available_budget": 5699,
+  "config": {
+    "base_episodes_per_task": 30,
+    "batch_size": 512,
+    "budgets": [
+      500,
+      1500,
+      3000,
+      4800
+    ],
+    "contrastive_margin": 0.2,
+    "contrastive_min_distance": 0.08,
+    "contrastive_weight": 0.25,
+    "device": "auto",
+    "disturbances": [
+      "nominal",
+      "object_shift",
+      "action_noise",
+      "action_delay",
+      "gripper_slip"
+    ],
+    "eval_episodes": 8,
+    "extra_episodes_per_task": 12,
+    "fine_tune_epochs": 35,
+    "help_thresholds": [
+      0.9,
+      0.95,
+      0.97,
+      0.99
+    ],
+    "hidden_dims": [
+      256,
+      256,
+      128
+    ],
+    "learning_rate": 0.0003,
+    "max_steps": 260,
+    "minimum_help_step": 5,
+    "output_dir": "artifacts/runs/research-v1",
+    "recovery_episodes_per_task": 18,
+    "risk_detection_horizon": 3,
+    "risk_epochs": 50,
+    "risk_hidden_dims": [
+      128,
+      128
+    ],
+    "risk_horizon": 16,
+    "risk_nominal_episodes_per_task": 6,
+    "seed": 27,
+    "tasks": [
+      "can",
+      "milk",
+      "bread",
+      "cereal"
+    ],
+    "train_epochs": 80,
+    "training_seeds": [
+      27,
+      127,
+      227,
+      327,
+      427
+    ],
+    "weight_decay": 1e-06
+  },
+  "datasets": {
+    "base_samples": 13996,
+    "extra_samples": 5699,
+    "recovery_samples": 7887,
+    "rejected_recovery_samples": 7887,
+    "risk_positive_samples": 950,
+    "risk_samples": 4233
+  },
+  "primary_run_elapsed_seconds": 7281.28928399086,
+  "evaluated_budgets": [
+    500,
+    1500,
+    3000,
+    4800
+  ],
+  "risk_training": {
+    "cached": true,
+    "checkpoint": "artifacts/runs/research-v1/checkpoints/risk_gate.pt",
+    "detection_positive_count": 231,
+    "feature_mode": "observation_delta",
+    "positive_count": 950,
+    "raw_observation_dim": 35,
+    "sample_count": 4233,
+    "threshold": 0.11040347814559937,
+    "train_config": {
+      "batch_size": 512,
+      "detection_horizon": 3,
+      "device": "auto",
+      "epochs": 50,
+      "hidden_dims": [
+        128,
+        128
+      ],
+      "learning_rate": 0.0003,
+      "seed": 27,
+      "target_recall": 0.9,
+      "weight_decay": 1e-06
+    },
+    "validation_episodes": [
+      3,
+      4,
+      20,
+      32,
+      34,
+      39,
+      42,
+      43,
+      50,
+      53,
+      68,
+      70,
+      79,
+      82,
+      84,
+      93,
+      94,
+      95,
+      98,
+      99
+    ],
+    "validation_metrics": {
+      "auroc": 0.9190605239385727,
+      "average_precision": 0.5274731084663298,
+      "brier": 0.08293215885741491,
+      "positive_rate": 0.2185430463576159,
+      "precision": 0.20202020202020202,
+      "recall": 0.8888888888888888
+    }
+  },
+  "system": {
+    "source_commit_at_primary_run": "4f34c492c5d8af2314e98ffd59a91ac38c3674fe",
+    "machine": "arm64",
+    "mps_available": true,
+    "numpy": "2.5.2",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.13 (main, Aug  7 2026, 02:15:23) [Clang 22.1.3 ]",
+    "torch": "2.13.0"
+  }
+}

@@ -1,78 +1,101 @@
-# InterveneSim
+# InterveneSim-X
 
 [![CI](https://github.com/ethanvillalovoz/intervenesim/actions/workflows/ci.yml/badge.svg)](https://github.com/ethanvillalovoz/intervenesim/actions/workflows/ci.yml)
 [![Python 3.11–3.12](https://img.shields.io/badge/python-3.11–3.12-blue)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![Apple Silicon](https://img.shields.io/badge/compute-Apple%20Silicon-black)](docs/reproducibility.md)
 
-InterveneSim is a simulation-only robotics benchmark for a focused question: **under the
-same added-label budget, does correcting failures teach a behavior-cloned manipulation
-policy more than collecting additional clean demonstrations?**
+**What should a robot learn from a correction?**
 
-The answer in the first reproducible benchmark is yes. Across 200 disturbed,
-seed-matched evaluation episodes, the recovery-data policy reaches **78.5% success**,
-compared with **58.0%** for the policy given the same 4,820 extra clean labels. That is a
-**+20.5 percentage-point** improvement (53 paired wins, 12 losses; two-sided exact
-McNemar p=2.79×10⁻⁷).
+InterveneSim-X is a reproducible simulation study of whether corrective actions gathered
+on a robot's failure distribution teach more than the same number of additional clean
+demonstration labels.
 
-![Success rates for all benchmark conditions](results/benchmark-v1/success_rates.png)
+> **Primary result:** recovery behavior cloning improves disturbed success from **38.6% to
+> 61.4%** against an equal clean-label budget—a **+22.8 percentage-point** gain that is
+> positive for all five independent policy-training seeds.
 
-## What the project demonstrates
+[Read the technical report](output/pdf/intervenesim-x-report.pdf) ·
+[Explore the project page](docs/index.html) ·
+[Inspect the frozen results](results/intervenesim-x) ·
+[Read the protocol](docs/intervenesim-x.md)
 
-- A complete robot-learning pipeline: scripted demonstrations, behavior cloning,
-  controlled failures, intervention collection, matched-budget retraining, and evaluation.
-- Four reproducible failure families: object displacement, control noise, action delay,
-  and gripper slip.
-- Honest experimental controls: identical base data, identical starting checkpoint,
-  identical additional sample count, and identical evaluation seeds.
-- A local-first stack that needs no robot, CUDA GPU, cloud compute, paid API, or proprietary
-  simulator.
+[![Matched baseline failure and recovery-data success](results/intervenesim-x/comparison-preview.png)](results/intervenesim-x/intervenesim-x-cereal-slip.mp4)
 
-The full protocol was run on a Mac mini with an M4 Pro and 64 GB of unified memory. It
-completed in about 14 minutes using PyTorch MPS. CPU execution is also supported.
+The image links to a seed-matched MP4: same cereal task, same gripper slip, same evaluation
+seed. The baseline fails; the recovery-trained policy reacquires and places the object.
 
-## Matched recovery example
+## The study at a glance
 
-[![Baseline failure and recovery-data success under the same gripper slip](results/benchmark-v1/comparison-preview.png)](results/benchmark-v1/gripper-slip-comparison.mp4)
+| Dimension | Design |
+|---|---|
+| Robot and simulator | Panda arm, robosuite PickPlace, MuJoCo |
+| Object domains | can, milk, bread, cereal |
+| Deployment disturbances | object shift, action noise, action delay, gripper slip |
+| Policy-training seeds | 5 independent initializations |
+| Added-label budgets | 500, 1,500, 3,000, 4,800 actions |
+| Primary comparison | recovery corrections vs. equal-count clean labels |
+| Compute | Apple M4 Pro / MPS; CPU supported; no CUDA required |
+| Cost | free software, no cloud compute, no paid APIs, no robot hardware |
 
-Both panels use seed `400028` and the same disturbance. The unaugmented baseline times out;
-the recovery-trained policy completes the task in 159 control steps. Click the image for
-the generated MP4.
+![Success across independent training seeds](results/intervenesim-x/multiseed_success.png)
 
-## Experimental design
+| Training condition | Disturbed success | Hierarchical 95% CI |
+|---|---:|---:|
+| Baseline | 39.4% ± 5.8% | [33.9, 45.5] |
+| + equal clean labels | 38.6% ± 2.3% | [34.5, 42.8] |
+| **+ recovery labels** | **61.4% ± 3.6%** | **[56.6, 65.9]** |
+| + recovery and contrastive loss | 39.4% ± 7.6% | [32.5, 46.2] |
 
-```mermaid
-flowchart LR
-    A["120 clean expert episodes"] --> B["Baseline behavior cloning"]
-    B --> C["Baseline policy"]
-    C --> D["Disturbed autonomous rollouts"]
-    D --> E["Supervisor-triggered expert recovery labels"]
-    A --> F["+ 4,820 clean labels"]
-    A --> G["+ 4,820 recovery labels"]
-    C --> F
-    C --> G
-    F --> H["More-demos policy"]
-    G --> I["Recovery-data policy"]
-    C --> J["750 matched evaluation episodes"]
-    H --> J
-    I --> J
-```
+The exact paired sign-permutation value for recovery versus clean is 0.0625. With only five
+training seeds, that is the smallest attainable two-sided value for a same-direction
+effect; the report emphasizes the 5/5 consistency, effect size, and interval instead of a
+binary significance claim.
 
-| Evaluation condition | Baseline | More clean demos | Recovery data |
-|---|---:|---:|---:|
-| Nominal | 100% | 94% | 92% |
-| Object shift | 80% | 76% | 82% |
-| Action noise | 64% | 68% | 86% |
-| Action delay | 44% | 52% | 60% |
-| Gripper slip | 54% | 36% | 86% |
-| **All disturbed episodes** | **60.5%** | **58.0%** | **78.5%** |
+## Why this is more than a benchmark score
 
-See the [benchmark report](results/benchmark-v1/report.md), [aggregate data](results/benchmark-v1/summary.csv),
-and [all 750 episode records](results/benchmark-v1/episodes.csv). The predeclared design and
-interpretation boundaries are in [docs/benchmark.md](docs/benchmark.md).
+The repository implements the whole research loop:
+
+1. Collect multi-domain clean expert demonstrations.
+2. Train a task- and phase-routed behavior-cloned policy.
+3. Create four controlled deployment failure families.
+4. Trigger privileged expert takeover on stalled or disturbed rollouts.
+5. Store both the correction and the robot action rejected at takeover.
+6. Retrain clean-data and correction-data controls at identical action-label budgets.
+7. Repeat across independent policy seeds and matched evaluation seeds.
+8. Train and audit a causal temporal help-request model.
+9. Produce episode records, uncertainty intervals, plots, a paper, and matched video.
+
+The runner is crash-resumable: datasets, checkpoints, and completed condition evaluations
+are cached independently.
+
+## Honest negative results
+
+### More supervision structure can hurt
+
+The dataset makes it possible to learn not only *toward* the correction but *away* from
+the action rejected by the expert. A fixed-margin contrastive objective sounds useful; it
+finishes **22.0 points below** ordinary recovery behavior cloning and loses for all five
+training seeds. The rejected action is contextually wrong, not necessarily globally wrong.
+
+### Offline risk ranking is not selective intervention
+
+The corrected temporal risk detector reaches **0.919 held-out AUROC**, but its
+validation-selected high-recall threshold asks for help almost everywhere online. The
+complete post-audit operating-point sweep is therefore published:
+
+| Risk threshold | Assisted disturbed success | Disturbed episodes helped | Nominal episodes helped |
+|---:|---:|---:|---:|
+| 0.90 | 89.8% | 87.5% | 28.1% |
+| 0.95 | 79.7% | 75.0% | 15.6% |
+| **0.97** | **75.8%** | **64.8%** | **3.1%** |
+| 0.99 | 54.7% | 22.7% | 0.0% |
+
+The sweep is explicitly exploratory because it followed the deployment calibration audit.
 
 ## Quick start
 
-Install [uv](https://docs.astral.sh/uv/), then run:
+Install [uv](https://docs.astral.sh/uv/), then:
 
 ```bash
 git clone https://github.com/ethanvillalovoz/intervenesim.git
@@ -82,46 +105,45 @@ uv run intervenesim doctor
 uv run intervenesim smoke
 ```
 
-`doctor` constructs the MuJoCo task and verifies that the scripted expert can solve it.
-`smoke` runs the full data-to-report pipeline with a tiny development configuration.
-
-Run the published experiment with:
+Run the expanded benchmark:
 
 ```bash
-uv run intervenesim benchmark \
-  --config configs/benchmark.yaml \
-  --output artifacts/runs/benchmark-v1
+uv run intervenesim research --config configs/research.yaml
 ```
 
-Record a seed-matched baseline-failure/recovery-success episode from those results:
+Record a matched InterveneSim-X comparison from the generated checkpoints:
 
 ```bash
-uv run intervenesim record-comparison \
-  --run artifacts/runs/benchmark-v1 \
-  --output artifacts/videos/gripper-slip-comparison.mp4 \
+uv run intervenesim record-research-comparison \
+  --run artifacts/runs/research-v1 \
+  --output artifacts/videos/intervenesim-x.mp4 \
+  --task cereal \
   --disturbance gripper_slip
 ```
 
-## Implementation notes
+The original single-task study remains available through `intervenesim benchmark`; its
+frozen results are under [`results/benchmark-v1`](results/benchmark-v1).
 
-The 24-dimensional policy observation contains end-effector position, gripper state, can
-and goal positions, relative geometry, and robot joint velocity. A compact MLP predicts
-Cartesian translation and gripper commands at 20 Hz. The simulator is robosuite's Panda
-`PickPlaceCan` task on MuJoCo 3.3.7.
+## Public artifacts
 
-The intervention supervisor and scripted expert use privileged simulator state only while
-collecting recovery labels. Learned policies receive neither the intervention flag nor the
-expert's internal phase. Once the supervisor takes over, corrective commands bypass
-synthetic actuator corruption; persistent physical scene changes remain. This distinction
-is documented because it determines exactly what “recovery” means in this benchmark.
+- [Technical report PDF](output/pdf/intervenesim-x-report.pdf)
+- [Paper source](paper/intervenesim-x.md)
+- [Predeclared protocol and post-audit amendments](docs/intervenesim-x.md)
+- [Reproducibility guide](docs/reproducibility.md)
+- [Dataset card](docs/dataset-card.md)
+- [Model card](docs/model-card.md)
+- [All autonomous episode records](results/intervenesim-x/autonomous_episodes.csv)
+- [All primary help-seeking episode records](results/intervenesim-x/help_episodes.csv)
+- [All threshold-sweep episode records](results/intervenesim-x/help_threshold_sweep_episodes.csv)
+- [Resolved experiment configuration](results/intervenesim-x/config.resolved.yaml)
+- [Machine-readable manifest](results/intervenesim-x/manifest.json)
 
-## Scope and limitations
+## Scope
 
-This is a state-based simulation experiment, not evidence of real-world transfer, visual
-robustness, or robot safety. The paired statistical test measures evaluation uncertainty
-for one trained model per condition; independently retrained seeds are the most important
-next experiment. Visual policies, human-provided interventions, more tasks, and sim-to-real
-validation are intentionally left as extensions rather than implied claims.
+This is a state-based simulation experiment with scripted corrections. It is not evidence
+of visual robustness, human intervention quality, robot safety, or sim-to-real transfer.
+After takeover, the scripted expert bypasses synthetic actuator corruption while persistent
+scene changes remain. These constraints define the result rather than hiding behind it.
 
 ## Development
 
@@ -131,5 +153,4 @@ uv run ruff check .
 uv run pytest
 ```
 
-The project is Apache-2.0 licensed. If you build on it, citation metadata is available in
-[CITATION.cff](CITATION.cff).
+InterveneSim-X is Apache-2.0 licensed. Citation metadata is in [CITATION.cff](CITATION.cff).
