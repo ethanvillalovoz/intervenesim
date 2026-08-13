@@ -1,0 +1,29 @@
+seed: 27
+training_seeds: [27, 127, 227, 327, 427]
+budgets: [500, 1500, 3000, 4800]
+base_episodes: 120
+extra_episodes: 48
+recovery_episodes: 72
+risk_nominal_episodes: 24
+risk_horizon: 16
+train_epochs: 80
+fine_tune_epochs: 35
+risk_epochs: 50
+eval_episodes: 12
+hidden_dims: [256, 256, 128]
+risk_hidden_dims: [128, 128]
+batch_size: 512
+learning_rate: 0.0003
+weight_decay: 0.000001
+contrastive_weight: 0.25
+contrastive_margin: 0.20
+contrastive_min_distance: 0.08
+device: auto
+max_steps: 260
+disturbances:
+  - nominal
+  - object_shift
+  - action_noise
+  - action_delay
+  - gripper_slip
+output_dir: artifacts/runs/research-v1

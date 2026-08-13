@@ -1,8 +1,9 @@
 import numpy as np
+import torch
 
 from intervenesim.config import TrainConfig
 from intervenesim.dataset import TrajectoryData
-from intervenesim.policy import PolicyAgent, train_policy
+from intervenesim.policy import PolicyAgent, contrastive_correction_loss, train_policy
 
 
 def test_policy_fits_small_mapping(tmp_path) -> None:
@@ -70,3 +71,16 @@ def test_robot_action_projection_holds_rotation_fixed(tmp_path) -> None:
     )
     action = PolicyAgent.load(checkpoint, device="cpu").action(observations[0])
     np.testing.assert_array_equal(action[3:6], np.zeros(3, dtype=np.float32))
+
+
+def test_contrastive_loss_prefers_correction_over_rejected_action() -> None:
+    correction = torch.tensor([[1.0, 0.0]])
+    rejected = torch.tensor([[0.0, 1.0]])
+    mask = torch.tensor([True])
+    good = contrastive_correction_loss(
+        correction, correction, rejected, mask, margin=0.2, min_distance=0.1
+    )
+    bad = contrastive_correction_loss(
+        rejected, correction, rejected, mask, margin=0.2, min_distance=0.1
+    )
+    assert good < bad

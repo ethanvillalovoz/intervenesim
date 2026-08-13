@@ -137,6 +137,8 @@ def train_policy(
         intervention=data.intervention,
         phases=data.phases,
         metadata=data.metadata,
+        rejected_actions=data.rejected_actions,
+        rejection_mask=data.rejection_mask,
     )
     model = MLPPolicy(data.observation_dim, data.action_dim, config.hidden_dims).to(device)
     if initial is not None:
@@ -152,25 +154,47 @@ def train_policy(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
     criterion = nn.MSELoss()
+    contrastive_weight = float(config.extra.get("contrastive_weight", 0.0))
+    contrastive_margin = float(config.extra.get("contrastive_margin", 0.2))
+    contrastive_min_distance = float(config.extra.get("contrastive_min_distance", 0.08))
     history: list[dict[str, float | int]] = []
     best_state: dict[str, torch.Tensor] | None = None
     best_validation = float("inf")
     for epoch in range(config.epochs):
         model.train()
         losses: list[float] = []
-        for observations, actions in train_loader:
+        contrastive_losses: list[float] = []
+        for observations, actions, rejected_actions, rejection_mask in train_loader:
             observations = observations.to(device=device, dtype=torch.float32)
             actions = actions.to(device=device, dtype=torch.float32)
+            rejected_actions = rejected_actions.to(device=device, dtype=torch.float32)
+            rejection_mask = rejection_mask.to(device=device, dtype=torch.bool)
             optimizer.zero_grad(set_to_none=True)
-            loss = criterion(model(observations), actions)
+            predictions = model(observations)
+            imitation_loss = criterion(predictions, actions)
+            correction_loss = contrastive_correction_loss(
+                predictions,
+                actions,
+                rejected_actions,
+                rejection_mask,
+                margin=contrastive_margin,
+                min_distance=contrastive_min_distance,
+            )
+            loss = imitation_loss + contrastive_weight * correction_loss
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             losses.append(float(loss.detach().cpu()))
+            contrastive_losses.append(float(correction_loss.detach().cpu()))
         validation = _validation_loss(model, normalized_data, validation_indices, device)
         train_loss = float(np.mean(losses))
         history.append(
-            {"epoch": epoch + 1, "train_loss": train_loss, "validation_loss": validation}
+            {
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "contrastive_loss": float(np.mean(contrastive_losses)),
+                "validation_loss": validation,
+            }
         )
         score = validation if np.isfinite(validation) else train_loss
         if score < best_validation:
@@ -192,6 +216,10 @@ def train_policy(
             str(key): int(value)
             for key, value in zip(*np.unique(data.sources, return_counts=True), strict=True)
         },
+        "rejected_sample_count": int(data.rejection_mask.sum()),
+        "contrastive_weight": contrastive_weight,
+        "contrastive_margin": contrastive_margin,
+        "contrastive_min_distance": contrastive_min_distance,
     }
     torch.save(
         {
@@ -213,6 +241,25 @@ def train_policy(
         "best_validation_loss": best_validation,
         **metadata,
     }
+
+
+def contrastive_correction_loss(
+    predictions: torch.Tensor,
+    corrections: torch.Tensor,
+    rejected_actions: torch.Tensor,
+    rejection_mask: torch.Tensor,
+    margin: float,
+    min_distance: float,
+) -> torch.Tensor:
+    """Margin loss that ranks a correction closer than the rejected robot action."""
+    correction_distance = torch.mean((predictions - corrections) ** 2, dim=-1)
+    rejected_distance = torch.mean((predictions - rejected_actions) ** 2, dim=-1)
+    pair_distance = torch.sqrt(torch.sum((corrections - rejected_actions) ** 2, dim=-1))
+    eligible = rejection_mask & (pair_distance >= min_distance)
+    if not torch.any(eligible):
+        return predictions.sum() * 0.0
+    ranking = torch.relu(margin + correction_distance - rejected_distance)
+    return ranking[eligible].mean()
 
 
 @torch.inference_mode()

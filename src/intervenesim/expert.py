@@ -49,11 +49,11 @@ class ScriptedExpert:
         can = state.can_pos
         eef = state.eef_pos
         if self.phase is Phase.APPROACH:
-            target = can + np.array([0.0, 0.0, 0.13], dtype=np.float32)
+            target = can + np.array([0.0, 0.0, state.grasp_offset_z + 0.105], dtype=np.float32)
             if np.linalg.norm(target - eef) < 0.02 or self.phase_steps > 70:
                 self._set_phase(Phase.DESCEND)
         elif self.phase is Phase.DESCEND:
-            target = can + np.array([0.0, 0.0, 0.025], dtype=np.float32)
+            target = can + np.array([0.0, 0.0, state.grasp_offset_z], dtype=np.float32)
             if np.linalg.norm(target - eef) < 0.014 or self.phase_steps > 55:
                 self._set_phase(Phase.CLOSE)
         elif self.phase is Phase.CLOSE:
@@ -84,9 +84,12 @@ class ScriptedExpert:
         can = state.can_pos
         eef = state.eef_pos
         if self.phase is Phase.APPROACH:
-            return can + np.array([0.0, 0.0, 0.13], dtype=np.float32), -1.0
+            return (
+                can + np.array([0.0, 0.0, state.grasp_offset_z + 0.105], dtype=np.float32),
+                -1.0,
+            )
         if self.phase is Phase.DESCEND:
-            return can + np.array([0.0, 0.0, 0.025], dtype=np.float32), -1.0
+            return can + np.array([0.0, 0.0, state.grasp_offset_z], dtype=np.float32), -1.0
         if self.phase is Phase.CLOSE:
             return eef.copy(), 1.0
         if self.phase is Phase.LIFT:
@@ -101,8 +104,16 @@ class ScriptedExpert:
 
     @staticmethod
     def _goal_eef(state: TaskState, z_offset: float) -> np.ndarray:
-        # The can is held slightly to the positive-x side of the Panda tool center.
-        return state.goal_pos + np.array([-0.022, -0.005, z_offset], dtype=np.float32)
+        # The object is held slightly to the positive-x side of the Panda tool center.
+        transport_clearance = 0.13 if z_offset > 0.15 else 0.0
+        return np.array(
+            [
+                state.goal_pos[0] - 0.022,
+                state.goal_pos[1] - 0.005,
+                state.place_eef_z + transport_clearance,
+            ],
+            dtype=np.float32,
+        )
 
     @staticmethod
     def _gripper_closed(state: TaskState) -> bool:
