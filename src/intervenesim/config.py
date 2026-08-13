@@ -67,15 +67,16 @@ class ResearchConfig:
     seed: int = 27
     training_seeds: tuple[int, ...] = (27, 127, 227, 327, 427)
     budgets: tuple[int, ...] = (500, 1500, 3000, 4800)
-    base_episodes: int = 120
-    extra_episodes: int = 48
-    recovery_episodes: int = 72
-    risk_nominal_episodes: int = 24
+    tasks: tuple[str, ...] = ("can", "milk", "bread", "cereal")
+    base_episodes_per_task: int = 30
+    extra_episodes_per_task: int = 12
+    recovery_episodes_per_task: int = 18
+    risk_nominal_episodes_per_task: int = 6
     risk_horizon: int = 16
     train_epochs: int = 80
     fine_tune_epochs: int = 35
     risk_epochs: int = 50
-    eval_episodes: int = 12
+    eval_episodes: int = 8
     hidden_dims: tuple[int, ...] = (256, 256, 128)
     risk_hidden_dims: tuple[int, ...] = (128, 128)
     batch_size: int = 512
@@ -99,13 +100,27 @@ class ResearchConfig:
     def from_yaml(cls, path: str | Path) -> ResearchConfig:
         with Path(path).open(encoding="utf-8") as handle:
             raw: dict[str, Any] = yaml.safe_load(handle) or {}
-        for key in ("training_seeds", "budgets", "hidden_dims", "risk_hidden_dims", "disturbances"):
+        for key in (
+            "training_seeds",
+            "budgets",
+            "tasks",
+            "hidden_dims",
+            "risk_hidden_dims",
+            "disturbances",
+        ):
             if key in raw:
                 raw[key] = tuple(raw[key])
         return cls(**raw)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("training_seeds", "budgets", "hidden_dims", "risk_hidden_dims", "disturbances"):
+        for key in (
+            "training_seeds",
+            "budgets",
+            "tasks",
+            "hidden_dims",
+            "risk_hidden_dims",
+            "disturbances",
+        ):
             data[key] = list(data[key])
         return data

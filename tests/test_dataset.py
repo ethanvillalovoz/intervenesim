@@ -45,3 +45,12 @@ def test_rejected_actions_survive_budget_and_round_trip(tmp_path) -> None:
     loaded = TrajectoryData.load(data.save(tmp_path / "pairs.npz"))
     assert loaded.rejection_mask.sum() == 1
     np.testing.assert_array_equal(loaded.rejected_actions[3], [0.5, -0.5])
+
+
+def test_stratified_budget_balances_available_groups() -> None:
+    data = make_data()
+    data.tasks[:6] = "can"
+    data.tasks[6:] = "milk"
+    sampled = data.stratified_sample_budget(6, seed=2, by=("tasks",))
+    names, counts = np.unique(sampled.tasks, return_counts=True)
+    assert dict(zip(names, counts, strict=True)) == {"can": 3, "milk": 3}

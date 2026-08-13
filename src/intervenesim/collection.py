@@ -75,6 +75,7 @@ def collect_clean_demonstrations(
                     disturbance="nominal",
                     intervention=False,
                     phase=phase,
+                    task=task,
                 )
                 state, _, done, info = env.step(action)
                 if done:
@@ -192,6 +193,7 @@ def collect_recovery_bundle(
                         intervention=True,
                         phase=phase,
                         rejected_action=rejected_action,
+                        task=task,
                     )
                 else:
                     action = policy.action(state.observation)

@@ -10,9 +10,10 @@ import typer
 from rich.console import Console
 
 from intervenesim.benchmark import run_benchmark
-from intervenesim.config import BenchmarkConfig
+from intervenesim.config import BenchmarkConfig, ResearchConfig
 from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
+from intervenesim.research import run_research
 from intervenesim.video import record_benchmark_comparison
 
 app = typer.Typer(
@@ -90,6 +91,21 @@ def record_comparison(
     """Record a matched baseline-failure / recovery-success benchmark episode."""
     result = record_benchmark_comparison(run, output, disturbance)
     console.print_json(json.dumps(result))
+
+
+@app.command()
+def research(
+    config: Annotated[Path, typer.Option(exists=True, readable=True)] = Path(
+        "configs/research.yaml"
+    ),
+    output: Annotated[
+        Path | None, typer.Option(help="Override the configured output directory.")
+    ] = None,
+) -> None:
+    """Run the multi-seed InterveneSim-X research benchmark."""
+    resolved = ResearchConfig.from_yaml(config)
+    manifest = run_research(resolved, output_dir=output, progress=_progress)
+    console.print(f"[bold green]Complete[/bold green]: {manifest['artifacts']['report']}")
 
 
 def _progress(message: str) -> None:

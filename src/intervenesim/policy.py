@@ -139,6 +139,7 @@ def train_policy(
         metadata=data.metadata,
         rejected_actions=data.rejected_actions,
         rejection_mask=data.rejection_mask,
+        tasks=data.tasks,
     )
     model = MLPPolicy(data.observation_dim, data.action_dim, config.hidden_dims).to(device)
     if initial is not None:
@@ -215,6 +216,10 @@ def train_policy(
         "sources": {
             str(key): int(value)
             for key, value in zip(*np.unique(data.sources, return_counts=True), strict=True)
+        },
+        "tasks": {
+            str(key): int(value)
+            for key, value in zip(*np.unique(data.tasks, return_counts=True), strict=True)
         },
         "rejected_sample_count": int(data.rejection_mask.sum()),
         "contrastive_weight": contrastive_weight,
