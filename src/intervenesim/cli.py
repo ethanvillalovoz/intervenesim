@@ -10,11 +10,18 @@ import typer
 from rich.console import Console
 
 from intervenesim.benchmark import run_benchmark
-from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig, VisualConfig
+from intervenesim.config import (
+    BenchmarkConfig,
+    ResearchConfig,
+    SelectiveConfig,
+    ValueConfig,
+    VisualConfig,
+)
 from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
 from intervenesim.human import capture_human_corrections
 from intervenesim.research import run_research
+from intervenesim.selective_research import run_selective_research
 from intervenesim.value_research import run_value_research
 from intervenesim.video import (
     record_benchmark_comparison,
@@ -184,6 +191,21 @@ def visual_research(
     resolved = VisualConfig.from_yaml(config)
     manifest = run_visual_research(resolved, output_dir=output, progress=_progress)
     console.print(f"[bold green]Complete[/bold green]: {manifest['report']}")
+
+
+@app.command("selective-research")
+def selective_research(
+    config: Annotated[Path, typer.Option(exists=True, readable=True)] = Path(
+        "configs/selective.yaml"
+    ),
+    output: Annotated[
+        Path | None, typer.Option(help="Override the configured output directory.")
+    ] = None,
+) -> None:
+    """Learn intervention value from one observed future per logged episode."""
+    resolved = SelectiveConfig.from_yaml(config)
+    manifest = run_selective_research(resolved, output_dir=output, progress=_progress)
+    console.print(f"[bold green]Complete[/bold green]: {manifest['artifacts']['report']}")
 
 
 def _progress(message: str) -> None:

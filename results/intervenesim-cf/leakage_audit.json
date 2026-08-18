@@ -1,0 +1,11 @@
+{
+  "files_checked": 15,
+  "forbidden_fields": [
+    "assisted_success",
+    "autonomous_success",
+    "helpful",
+    "signed_value"
+  ],
+  "passed": true,
+  "violations": {}
+}
