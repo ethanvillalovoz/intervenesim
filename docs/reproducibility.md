@@ -1,4 +1,4 @@
-# Reproducing InterveneSim-Value
+# Reproducing InterveneSim-CF
 
 ## Reference environment
 
@@ -33,11 +33,14 @@ uv run intervenesim research \
 ```bash
 uv run intervenesim research --config configs/research.yaml
 uv run intervenesim value-research --config configs/value.yaml
+uv run intervenesim selective-research --config configs/selective.yaml
 ```
 
 The first command builds the prerequisite policies under `artifacts/runs/research-v1`.
 The second collects matched counterfactual branches and stores the v0.3 experiment under
-`artifacts/runs/value-v1`.
+`artifacts/runs/value-v1`. The third hides one branch per logged decision, trains causal
+estimators, and audits them against the held-out exact forks. It writes the frozen v0.4 result to
+`results/intervenesim-cf`.
 Existing complete artifacts are loaded on restart, so a failed or interrupted run resumes
 at the next unfinished condition. Do not delete the run directory between resumptions.
 
@@ -51,6 +54,15 @@ budgets. Thresholds are derived only from training-policy episodes.
 
 The five-fold policy-seed analysis in the frozen results is explicitly exploratory because
 it was added after inspection of the primary three-seed-train/two-seed-test audit.
+
+## v0.4 single-world configuration
+
+The resolved protocol is
+[`results/intervenesim-cf/config.resolved.yaml`](../results/intervenesim-cf/config.resolved.yaml).
+It produces randomized, uncertainty-selective, and online adaptive-value logs for five logging
+seeds. Each log exposes one candidate and one observed outcome per source episode. The leakage
+audit rejects any serialized potential-outcome field. Equal-budget evaluation is primary;
+training-threshold results are a separate calibration stress test.
 
 ## Optional vision and human capture
 
@@ -87,6 +99,7 @@ After running the benchmark, install the paper-only dependencies and rebuild:
 uv sync --locked --extra paper
 uv run python scripts/build_paper.py
 uv run python scripts/build_value_paper.py
+uv run python scripts/build_cf_paper.py
 uv run intervenesim record-value-counterfactual \
   --run artifacts/runs/value-v1 \
   --output artifacts/videos/intervenesim-value-fork.mp4
@@ -102,6 +115,13 @@ and `pypdf`; those paper-only tools are not required for the simulator or benchm
 
 ## Interpretation checklist
 
+- Treat every v0.4 hypothesis as exploratory; the protocol is timestamped internally but was not
+  externally preregistered.
+- Use score-ranked exact budgets for method comparisons and the predeployment table for threshold
+  calibration claims.
+- Treat logging seed—not candidate row—as the primary unit of v0.4 method uncertainty.
+- Do not call the reversibility proxy a PAINT reproduction.
+- Treat adaptive logging as selective data collection, not online control-policy improvement.
 - Treat the v0.3 three-seed-train/two-seed-test split as primary.
 - Treat five-fold value-gate comparisons as exploratory.
 - Compare gates using both realized intervention rate and task success.

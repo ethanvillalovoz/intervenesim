@@ -1,100 +1,134 @@
-# InterveneSim-Value
+# InterveneSim-CF
 
 [![CI](https://github.com/ethanvillalovoz/intervenesim/actions/workflows/ci.yml/badge.svg)](https://github.com/ethanvillalovoz/intervenesim/actions/workflows/ci.yml)
 [![Python 3.11–3.12](https://img.shields.io/badge/python-3.11–3.12-blue)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Apple Silicon](https://img.shields.io/badge/compute-Apple%20Silicon-black)](docs/reproducibility.md)
+[![Counterfactual leakage audit](https://img.shields.io/badge/counterfactual%20leakage-0-brightgreen)](results/intervenesim-cf/leakage_audit.json)
 
-**A robot should not ask “Will I fail?” It should ask “Will help change the outcome?”**
+**Learn when to ask for help when training reveals only one possible future.**
 
-InterveneSim-Value is a reproducible causal benchmark for learning when expert takeover is
-actually useful. At fixed decision points, it snapshots the complete MuJoCo and controller
-state, then evaluates two futures from that exact state: autonomous continuation and expert
-takeover. The resulting label measures the value of intervention—not merely failure risk.
+InterveneSim-CF is a simulation benchmark for causal robot help-seeking under selective
+feedback. A deployment log contains a context, the decision to continue or request assistance,
+the outcome that actually occurred, and the logging propensity. It never contains both potential
+outcomes. Exact MuJoCo forks are kept behind an information boundary and revealed only to the
+evaluator.
 
-> **Primary held-out-policy result:** at approximately one-quarter of episodes helped, the
-> value gate reaches **66.2% success with 23.3% intervention**, versus **60.4% success with
-> 24.6% intervention** for a failure-risk gate. Its helpful-intervention AUROC is **0.817**
-> versus **0.706** for risk.
+This closes the largest realism gap in InterveneSim-Value v0.3: physical systems cannot be
+rewound during training to reveal what would have happened under the action not taken.
 
-[Read the v0.3 technical report](output/pdf/intervenesim-value-report.pdf) ·
-[Explore the project page](docs/index.html) ·
-[Inspect the frozen v0.3 results](results/intervenesim-value) ·
-[Read the protocol](docs/intervenesim-value.md)
+> **Primary v0.4 finding:** with one factual outcome from each of 240 training episodes, the
+> T-learner reduces exact individual-effect error from **0.614 PEHE for failure risk to 0.524**
+> and reaches **0.732 helpful-intervention AUROC** versus **0.706** for risk. At equal 25% and
+> 50% intervention budgets, however, its success advantage over risk is only **+0.4** and
+> **+2.0 points**, and it does not consistently beat a reversibility proxy. Better causal
+> estimation does not automatically produce a better help policy.
 
-[![Exact counterfactual fork: autonomous failure and expert success](results/intervenesim-value/comparison-preview.png)](results/intervenesim-value/intervenesim-value-fork.mp4)
+[Read the v0.4 paper](output/pdf/intervenesim-cf-report.pdf) ·
+[Inspect the generated report](results/intervenesim-cf/report.md) ·
+[Inspect the protocol](docs/intervenesim-cf.md) ·
+[Read the novelty boundary](docs/related-work.md) ·
+[Inspect the factual logs](results/intervenesim-cf/logs) ·
+[View the v0.3 paper](output/pdf/intervenesim-value-report.pdf)
 
-Both video panels start at the same saved simulator state on a held-out bread-policy
-gripper-slip episode. The replay is checked against the frozen dataset before encoding:
-autonomous continuation fails; expert takeover succeeds.
+![One-outcome effect-estimation results](results/intervenesim-cf/effect_estimation.png)
 
-## The causal experiment
+## The single-world experiment
 
 | Dimension | Design |
 |---|---|
 | Robot and simulator | Panda arm, robosuite PickPlace, MuJoCo |
-| Object domains | can, milk, bread, cereal |
-| Candidate intervention steps | 10, 30, 50, 70, 90, 110, 130 |
-| Counterfactual branches | autonomous continuation vs. scripted expert takeover |
-| Primary policy split | train on seeds 27/127/227; test on unseen seeds 327/427 |
-| Evaluation scale | 1,517 candidate states from 240 held-out-policy episodes |
-| Comparators | failure risk, ensemble uncertainty, never, always, causal oracle |
+| Tasks | can, milk, bread, cereal |
+| Deployment conditions | nominal, object shift, action noise, action delay, gripper slip |
+| Factual training data | one decision and one observed outcome from each of 240 episodes |
+| Hidden evaluator | 1,517 exact paired candidates from 240 unseen-policy episodes |
+| Logging policies | randomized, uncertainty-selective, online adaptive-value |
+| Causal estimators | S-, T-, inverse-propensity, and cross-fitted doubly robust learners |
+| Closest prior-work baseline | autonomous-failure/reversibility proxy, explicitly PAINT-inspired |
+| Distribution shift | unseen policies, leave-one-task-out, leave-one-disturbance-out |
+| Assistant shift | immediate, one-candidate delayed, two-candidate delayed |
 | Compute | Apple M4 Pro / MPS; CPU supported; no CUDA required |
 | Cost | free software, no cloud compute, no paid APIs, no robot hardware |
 
-![Causal success-intervention frontier](results/intervenesim-value/value_frontier.png)
+The training artifact has a different type from the evaluator. `LoggedBanditData` cannot
+serialize `autonomous_success`, `assisted_success`, `helpful`, or `signed_value`. A machine-readable
+[leakage audit](results/intervenesim-cf/leakage_audit.json) checks every frozen factual log.
 
-| Gate | Target budget | Success | Realized intervention | Useful-request precision |
+![Equal-budget policy comparison](results/intervenesim-cf/single_world_frontier.png)
+
+| Method | PEHE ↓ | Helpful AUROC ↑ | Success @ 25% | Success @ 50% |
 |---|---:|---:|---:|---:|
-| **Value** | 25% | **66.2%** | 23.3% | **91.1%** |
-| Failure risk | 25% | 60.4% | 24.6% | 62.7% |
-| Ensemble uncertainty | 25% | 58.3% | 19.2% | 69.6% |
-| **Value** | 50% | **89.6%** | 54.6% | **81.7%** |
-| Failure risk | 50% | 73.8% | 45.8% | 62.7% |
-| Ensemble uncertainty | 50% | 81.7% | 52.1% | 70.4% |
+| Paired-label supervision† | **0.488** | **0.791** | **66.2%** | **81.7%** |
+| T-learner | 0.524 | 0.732 | 61.7% | 78.2% |
+| Reversibility proxy | 0.550 | 0.725 | 62.0% | 79.8% |
+| Cross-fitted DR learner | 0.617 | 0.694 | 62.4% | 78.1% |
+| Failure risk | 0.614 | 0.706 | 61.3% | 76.2% |
 
-`never_help` succeeds on 45.0% of evaluation episodes. `always_help` reaches 98.3% but
-intervenes on every episode. The causal oracle reaches 99.6% while intervening on 54.6%.
-The learned gate exposes the complete tradeoff instead of selecting one flattering point.
+†The paired-label model sees both simulator futures and is a privileged comparator, not a
+deployable single-world method. Metric values above are means over five randomized logging seeds;
+fixed baselines repeat across seeds.
 
-## Robustness across policy seeds
+The primary table score-ranks episodes and gives every method the exact same intervention budget
+without reading outcomes. A separate predeployment audit freezes thresholds on training contexts.
+That audit finds a serious calibration failure: the DR learner's nominal 25% threshold requests
+help on roughly half of unseen-policy episodes. Both views are published.
 
-The predeclared primary experiment uses three training-policy seeds and two unseen test-policy
-seeds. After that audit, a clearly marked exploratory leave-one-policy-seed-out analysis was
-added across all five seeds.
+## Online, open-world, and assistant-shift audits
 
-![Five-fold held-out-policy robustness](results/intervenesim-value/crossval_success.png)
+- **Online logging:** the adaptive logger begins randomized, refits from past factual outcomes
+  every 60 episodes, and retains its exact epsilon-soft treatment propensity.
+- **Sample efficiency:** learning curves expose performance at 60, 120, 180, and 240 factual
+  episodes rather than only reporting the final model.
+- **Open world:** every task and every disturbance is removed from training in turn. The complete
+  per-group results and negative cases are retained in
+  [`open_world.csv`](results/intervenesim-cf/open_world.csv).
+- **Assistant latency:** the evaluator delays assistance by one or two candidate intervals along
+  the exact autonomous trajectory. This tests whether a gate trained for immediate help survives
+  a change in who arrives when.
+- **Explicit cost:** policies are evaluated for intervention costs from 0.05 to 0.50 using
+  success minus intervention cost, not only a request-count budget.
 
-Near the 25% budget, the value gate beats risk by **8.1 ± 4.2 points** and wins on **5/5**
-held-out seeds. Near 50%, it leads risk by **14.7 ± 3.1 points** and uncertainty by
-**7.9 ± 2.8 points**, again winning on 5/5 seeds. Because this analysis followed inspection
-of the primary result, it is evidence of robustness—not a new confirmatory test.
+![Held-out task and disturbance results](results/intervenesim-cf/open_world.png)
 
-## Vision and genuine human takeover hooks
+## Relationship to PAINT and interactive imitation learning
 
-The primary benchmark is deliberately state based, but v0.3 adds two bridges toward more
-realistic interaction:
+[PAINT](https://arxiv.org/abs/2210.10765) learns when an autonomous learner is approaching an
+irreversible state and proactively asks for help. InterveneSim-CF estimates a different quantity:
+the signed outcome change caused by a particular assistance treatment. High failure probability
+does not guarantee that help can still repair the episode, and assistance can be ineffective or
+harmful.
 
-- A frozen ImageNet ResNet-18 probe trained on front-view RGB plus non-object
-  proprioception reaches **0.712 AUROC** on an unseen policy seed. Its ranking transfers to
-  an unseen agent-view camera at **0.696 AUROC**, while its 0.5-threshold recall collapses
-  to **1.9%**. That calibration failure is published, not hidden.
-- `capture-human-corrections` runs policy-first simulation and lets a person press `T` to
-  take over with keyboard Cartesian/gripper control. It stores human actions, timing, and
-  masks in a schema separate from scripted supervision. No human-study claim is made.
+The repository also compares its scope with
+[ThriftyDAgger](https://proceedings.mlr.press/v164/hoque22a.html),
+[HG-DAgger](https://arxiv.org/abs/1810.02890), and
+[DAgger](https://proceedings.mlr.press/v15/ross11a.html). The current contribution is the exact-fork
+audit benchmark and empirical study—not a claim that the causal meta-learners themselves are new.
+See [the full related-work statement](docs/related-work.md).
 
-![Matched held-out observations from two cameras](results/intervenesim-value/visual/visual_camera_montage.png)
+## Research arc
 
-## Earlier result: what should a robot learn from correction?
+### v0.3 — learn intervention value from both futures
 
-InterveneSim-X, the v0.2 study retained in this repository, tested corrective recovery
-labels against the same number of extra clean labels. Recovery behavior cloning improved
-disturbed success from **38.6% to 61.4%**—a **+22.8-point** gain that was positive for all
-five independent training seeds. Its report and frozen artifacts remain available:
+InterveneSim-Value snapshots the complete MuJoCo and controller state, then replays autonomous
+continuation and scripted expert takeover. Its paired-label value gate reaches **0.817 AUROC** and,
+near a 25% target, **66.2% success at 23.3% intervention** versus **60.4% at 24.6%** for risk.
 
-- [InterveneSim-X technical report](output/pdf/intervenesim-x-report.pdf)
-- [InterveneSim-X frozen results](results/intervenesim-x)
-- [InterveneSim-X protocol](docs/intervenesim-x.md)
+[![Exact fork: autonomous failure and expert success](results/intervenesim-value/comparison-preview.png)](results/intervenesim-value/intervenesim-value-fork.mp4)
+
+The exploratory five-fold policy-seed audit found value above risk on all five seeds. The frozen
+RGB probe transferred ranking from front-view to agent-view but not calibration, and the genuine
+keyboard takeover interface remained separate from scripted data.
+
+### v0.2 — learn recovery from correction
+
+InterveneSim-X compares corrective recovery labels with the same number of extra clean labels.
+Recovery behavior cloning improves disturbed success from **38.6% to 61.4%**, a **+22.8-point**
+gain that is positive across all five training seeds.
+
+- [v0.3 technical report](output/pdf/intervenesim-value-report.pdf)
+- [v0.3 frozen results](results/intervenesim-value)
+- [v0.2 technical report](output/pdf/intervenesim-x-report.pdf)
+- [v0.2 frozen results](results/intervenesim-x)
 
 ## Reproduce
 
@@ -108,51 +142,53 @@ uv run intervenesim doctor
 uv run pytest
 ```
 
-The value experiment consumes the policy checkpoints produced by InterveneSim-X:
+Reproduce the original policies and exact-fork data, then run the single-world audit:
 
 ```bash
 uv run intervenesim research --config configs/research.yaml
 uv run intervenesim value-research --config configs/value.yaml
-uv run intervenesim record-value-counterfactual \
-  --run artifacts/runs/value-v1 \
-  --output artifacts/videos/intervenesim-value-fork.mp4
+uv run intervenesim selective-research --config configs/selective.yaml
 ```
 
-The optional RGB pilot downloads free ImageNet weights on first use:
+If the v0.3 artifacts already exist, only the final command is required. It trains small heads and
+runs entirely on CPU or Apple Metal.
+
+The development smoke test is:
 
 ```bash
-uv sync --locked --extra vision
-uv run intervenesim visual-research --config configs/visual.yaml
+uv run intervenesim selective-research \
+  --config configs/selective-smoke.yaml \
+  --output artifacts/runs/selective-smoke
 ```
 
-To collect actual user takeovers in the simulator viewer:
+## Public v0.4 artifacts
 
-```bash
-uv run intervenesim capture-human-corrections \
-  --checkpoint artifacts/runs/research-v1/checkpoints/seed-27/baseline.pt \
-  --output artifacts/human/corrections.npz
-```
-
-## Public artifacts
-
-- [v0.3 technical report PDF](output/pdf/intervenesim-value-report.pdf)
-- [Paper source](paper/intervenesim-value.md)
-- [Predeclared protocol and post-audit amendment](docs/intervenesim-value.md)
-- [Reproducibility guide](docs/reproducibility.md)
-- [Dataset card](docs/dataset-card.md)
-- [Model card](docs/model-card.md)
-- [Primary gate episode records](results/intervenesim-value/gate_episodes.csv)
-- [Five-fold gate episode records](results/intervenesim-value/crossval_gate_episodes.csv)
-- [Raw counterfactual outcome tables](results/intervenesim-value)
-- [Resolved configurations](results/intervenesim-value/config.resolved.yaml)
-- [Machine-readable manifest](results/intervenesim-value/manifest.json)
+- [Research report](results/intervenesim-cf/report.md)
+- [Technical report PDF](output/pdf/intervenesim-cf-report.pdf)
+- [Paper source](paper/intervenesim-cf.md)
+- [Study protocol and hypothesis status](docs/study-protocol-v0.4.md)
+- [Method protocol](docs/intervenesim-cf.md)
+- [Related work and novelty boundary](docs/related-work.md)
+- [Factual-log dataset card](docs/dataset-card-cf.md)
+- [Reviewer guide](docs/reviewer-guide.md)
+- [Changelog](CHANGELOG.md)
+- [Counterfactual metrics](results/intervenesim-cf/counterfactual_metrics.csv)
+- [Equal-budget seed results](results/intervenesim-cf/gate_seed_summary.csv)
+- [Training-threshold calibration audit](results/intervenesim-cf/predeployment_gate_seed_summary.csv)
+- [Learning curves](results/intervenesim-cf/learning_curves.csv)
+- [Open-world audit](results/intervenesim-cf/open_world.csv)
+- [Assistant-latency audit](results/intervenesim-cf/latency_aggregate.csv)
+- [Cost-sensitive evaluation](results/intervenesim-cf/cost_summary.csv)
+- [Resolved configuration](results/intervenesim-cf/config.resolved.yaml)
+- [Machine-readable manifest](results/intervenesim-cf/manifest.json)
 
 ## Scope
 
-The matched counterfactual is exact for this simulator, disturbance process, candidate grid,
-and scripted expert. It does not establish the value of a particular human intervention,
-real-robot safety, or sim-to-real transfer. The visual study is a frozen-encoder diagnostic,
-not a visual control policy. These boundaries define the result.
+The exact counterfactual is valid only for this simulator, disturbance process, candidate grid,
+and scripted assistant. It does not identify the value of a particular human intervention,
+establish real-robot safety, or demonstrate sim-to-real transfer. The adaptive logger changes
+which outcome is observed; it does not yet improve the robot control policy online. Those limits
+are part of the result.
 
 ## Development
 
@@ -162,5 +198,4 @@ uv run ruff check .
 uv run pytest
 ```
 
-InterveneSim-Value is Apache-2.0 licensed. Citation metadata is in
-[CITATION.cff](CITATION.cff).
+InterveneSim-CF is Apache-2.0 licensed. Citation metadata is in [CITATION.cff](CITATION.cff).

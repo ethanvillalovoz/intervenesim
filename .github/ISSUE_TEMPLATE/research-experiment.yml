@@ -1,0 +1,37 @@
+name: Research experiment
+description: Propose a falsifiable InterveneSim experiment or baseline.
+title: "[Experiment]: "
+labels: ["research"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+      description: State one question that the experiment can answer.
+    validations:
+      required: true
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis and failure condition
+      description: Define the expected result and what would falsify it.
+    validations:
+      required: true
+  - type: textarea
+    id: protocol
+    attributes:
+      label: Protocol
+      description: Specify data, splits, baselines, metrics, seeds, and compute estimate.
+    validations:
+      required: true
+  - type: checkboxes
+    id: leakage
+    attributes:
+      label: Information boundary
+      options:
+        - label: The learner does not access hidden potential outcomes.
+          required: true
+        - label: The unit of uncertainty and all post-hoc analyses are declared.
+          required: true
+        - label: The experiment requires no paid service or proprietary data.
+          required: true

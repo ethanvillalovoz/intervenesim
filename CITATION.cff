@@ -1,17 +1,18 @@
 cff-version: 1.2.0
-message: "If you use InterveneSim-Value, please cite this software and technical report."
-title: "InterveneSim-Value: Will Help Change the Outcome?"
+message: "If you use InterveneSim-CF, please cite this software and technical report."
+title: "InterveneSim-CF: Learning When to Ask from One Observed Future"
 type: software
 authors:
   - family-names: Villalovoz
     given-names: Ethan
 repository-code: "https://github.com/ethanvillalovoz/intervenesim"
 license: Apache-2.0
-version: 0.3.0
-date-released: 2026-08-13
+version: 0.4.0
+date-released: 2026-08-18
 abstract: >-
-  A reproducible causal benchmark that uses exact simulator forks to learn whether expert
-  takeover changes outcomes across four simulated manipulation domains.
+  A reproducible benchmark that hides one branch of exact simulator counterfactuals during
+  training, then audits intervention-effect estimators on unseen robot policies, tasks,
+  disturbances, logging policies, costs, and assistance latencies.
 keywords:
   - imitation learning
   - interactive imitation learning
