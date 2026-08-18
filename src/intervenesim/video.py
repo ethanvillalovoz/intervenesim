@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
 import imageio.v2 as imageio
 import numpy as np
 import pandas as pd
+import yaml
 from PIL import Image, ImageDraw, ImageFont
 
+from intervenesim.counterfactual import CounterfactualData
 from intervenesim.disturbances import Disturbance
 from intervenesim.environment import PickPlaceEnv
+from intervenesim.expert import ScriptedExpert
 from intervenesim.policy import PolicyAgent
 
 
@@ -124,6 +128,179 @@ def record_research_comparison(
         "baseline_success": baseline.success,
         "recovery_success": recovery.success,
     }
+
+
+def record_value_counterfactual(
+    value_run_dir: str | Path,
+    output: str | Path,
+    fps: int = 20,
+) -> dict[str, object]:
+    """Record two futures forked from one helpful held-out simulator state."""
+    value_run = Path(value_run_dir)
+    part, row = _select_helpful_value_candidate(value_run / "datasets")
+    data = CounterfactualData.load(part)
+    metadata = data.metadata
+    task = str(row["task"])
+    disturbance_name = str(row["disturbance"])
+    candidate_step = int(row["step"])
+    episodes = int(metadata["episodes"])
+    local_episode_id = int(row["episode_id"])
+    disturbance_names = tuple(
+        yaml.safe_load((value_run / "config.resolved.yaml").read_text())["disturbances"]
+    )
+    disturbance_index = disturbance_names.index(disturbance_name)
+    episode_index = local_episode_id - disturbance_index * episodes
+    episode_seed = int(metadata["seed"]) + disturbance_index * 10_000 + episode_index
+    policy = PolicyAgent.load(metadata["policy_checkpoint"])
+    autonomous, assisted = _record_counterfactual_fork(
+        policy,
+        task,
+        disturbance_name,
+        episode_seed,
+        candidate_step,
+    )
+    if autonomous.success != bool(row["autonomous_success"]):
+        raise RuntimeError("replayed autonomous outcome does not match the frozen dataset")
+    if assisted.success != bool(row["assisted_success"]):
+        raise RuntimeError("replayed assisted outcome does not match the frozen dataset")
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _write_counterfactual_fork(
+        autonomous,
+        assisted,
+        destination,
+        task,
+        disturbance_name,
+        candidate_step,
+        fps,
+    )
+    return {
+        "output": str(destination),
+        "source_dataset": str(part),
+        "task": task,
+        "disturbance": disturbance_name,
+        "episode_seed": episode_seed,
+        "candidate_step": candidate_step,
+        "autonomous_success": autonomous.success,
+        "assisted_success": assisted.success,
+    }
+
+
+def _select_helpful_value_candidate(dataset_dir: Path) -> tuple[Path, pd.Series]:
+    preferences = (("gripper_slip", 70), ("object_shift", 30))
+    parts = sorted(dataset_dir.glob("eval-seed-*.npz"))
+    for disturbance, minimum_step in preferences:
+        for part in parts:
+            frame = CounterfactualData.load(part).to_frame()
+            candidates = frame.loc[
+                frame["helpful"]
+                & (frame["disturbance"] == disturbance)
+                & (frame["step"] >= minimum_step)
+            ]
+            if not candidates.empty:
+                return part, candidates.iloc[0]
+    raise ValueError("no helpful held-out counterfactual candidate found")
+
+
+def _record_counterfactual_fork(
+    policy: PolicyAgent,
+    task: str,
+    disturbance_name: str,
+    episode_seed: int,
+    candidate_step: int,
+    max_steps: int = 260,
+) -> tuple[VideoRollout, VideoRollout]:
+    disturbance = Disturbance(disturbance_name, episode_seed + 50_000)
+    with PickPlaceEnv(
+        max_steps=max_steps,
+        offscreen=True,
+        task=task,
+        task_conditioning=True,
+    ) as env:
+        disturbance.reset(env.action_dim)
+        state = env.reset(episode_seed)
+        for step in range(candidate_step + 1):
+            state = disturbance.before_step(env, state, step)
+            if step == candidate_step:
+                snapshot = env.snapshot()
+                branch_disturbance = deepcopy(disturbance)
+                break
+            action = disturbance.transform_action(policy.action(state.observation), step)
+            state, _, done, _ = env.step(action)
+            if done:
+                raise RuntimeError("episode ended before the selected counterfactual state")
+
+        state = env.restore(snapshot)
+        autonomous_frames = [env.capture_frame()]
+        autonomous_info: dict[str, object] = {"success": False}
+        for step in range(candidate_step, max_steps):
+            state = branch_disturbance.before_step(env, state, step)
+            action = branch_disturbance.transform_action(policy.action(state.observation), step)
+            state, _, done, autonomous_info = env.step(action)
+            autonomous_frames.append(env.capture_frame())
+            if done:
+                break
+
+        state = env.restore(snapshot)
+        expert = ScriptedExpert()
+        expert.reset(state, recovering=True)
+        assisted_frames = [env.capture_frame()]
+        assisted_info: dict[str, object] = {"success": False}
+        for _ in range(candidate_step, max_steps):
+            state, _, done, assisted_info = env.step(expert.action(state))
+            assisted_frames.append(env.capture_frame())
+            if done:
+                break
+
+    return (
+        VideoRollout(
+            autonomous_frames,
+            bool(autonomous_info["success"]),
+            len(autonomous_frames) - 1,
+            0,
+        ),
+        VideoRollout(
+            assisted_frames,
+            bool(assisted_info["success"]),
+            len(assisted_frames) - 1,
+            0,
+        ),
+    )
+
+
+def _write_counterfactual_fork(
+    autonomous: VideoRollout,
+    assisted: VideoRollout,
+    output: Path,
+    task: str,
+    disturbance_name: str,
+    candidate_step: int,
+    fps: int,
+) -> None:
+    frame_count = max(len(autonomous.frames), len(assisted.frames))
+    hold_frames = fps * 2
+    with imageio.get_writer(
+        output,
+        fps=fps,
+        codec="libx264",
+        quality=8,
+        macro_block_size=None,
+    ) as writer:
+        for index in range(frame_count + hold_frames):
+            left = autonomous.frames[min(index, len(autonomous.frames) - 1)]
+            right = assisted.frames[min(index, len(assisted.frames) - 1)]
+            left_panel = _annotate(left, "Autonomous policy", _status(autonomous, index), index)
+            right_panel = _annotate(right, "Expert takeover", _status(assisted, index), index)
+            combined = np.concatenate([left_panel, right_panel], axis=1)
+            image = Image.fromarray(combined)
+            draw = ImageDraw.Draw(image)
+            text = (
+                f"Exact simulator fork | {task} / {disturbance_name.replace('_', ' ')} "
+                f"| decision step {candidate_step}"
+            )
+            draw.rounded_rectangle((128, 38, 512, 60), radius=6, fill=(17, 24, 39, 220))
+            draw.text((142, 43), text, fill="white", font=ImageFont.load_default())
+            writer.append_data(np.asarray(image))
 
 
 def select_comparison_seed(episodes: pd.DataFrame, disturbance_name: str) -> int:

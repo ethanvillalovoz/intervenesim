@@ -1,0 +1,206 @@
+{
+  "artifacts": {
+    "crossval_paired": "artifacts/runs/value-v1/results/crossval_paired.csv",
+    "crossval_seed_rates": "artifacts/runs/value-v1/results/crossval_seed_rates.csv",
+    "crossval_success": "artifacts/runs/value-v1/results/crossval_success.png",
+    "frontier": "artifacts/runs/value-v1/results/value_frontier.png",
+    "gate_episodes": "artifacts/runs/value-v1/results/gate_episodes.csv",
+    "gate_summary": "artifacts/runs/value-v1/results/gate_summary.csv",
+    "precision": "artifacts/runs/value-v1/results/request_precision.png",
+    "report": "artifacts/runs/value-v1/results/report.md"
+  },
+  "config": {
+    "batch_size": 512,
+    "candidate_steps": [
+      10,
+      30,
+      50,
+      70,
+      90,
+      110,
+      130
+    ],
+    "device": "auto",
+    "disturbances": [
+      "nominal",
+      "object_shift",
+      "action_noise",
+      "action_delay",
+      "gripper_slip"
+    ],
+    "eval_episodes": 6,
+    "eval_policy_seeds": [
+      327,
+      427
+    ],
+    "learning_rate": 0.0003,
+    "max_steps": 260,
+    "output_dir": "artifacts/runs/value-v1",
+    "research_run": "artifacts/runs/research-v1",
+    "seed": 27,
+    "target_budgets": [
+      0.1,
+      0.25,
+      0.5,
+      0.75
+    ],
+    "tasks": [
+      "can",
+      "milk",
+      "bread",
+      "cereal"
+    ],
+    "train_episodes": 4,
+    "train_policy_seeds": [
+      27,
+      127,
+      227
+    ],
+    "value_epochs": 60,
+    "value_hidden_dims": [
+      128,
+      128
+    ],
+    "weight_decay": 1e-06
+  },
+  "datasets": {
+    "eval_episodes": 240,
+    "eval_helpful": 688,
+    "eval_samples": 1517,
+    "train_episodes": 240,
+    "train_helpful": 624,
+    "train_samples": 1505
+  },
+  "elapsed_seconds": 1.339404821395874,
+  "gate_metrics": {
+    "risk_gate": {
+      "auroc": 0.7060324150699918,
+      "average_precision": 0.6168101952451978,
+      "brier": 0.33281296969292407,
+      "positive_rate": 0.16479894528675015,
+      "precision": 0.64,
+      "recall": 0.23255813953488372
+    },
+    "uncertainty_gate": {
+      "auroc": 0.703255182764328,
+      "average_precision": 0.6428695952710742,
+      "brier": 0.43397416181703635,
+      "positive_rate": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    "value_gate": {
+      "auroc": 0.8171725530900216,
+      "average_precision": 0.7525444123437838,
+      "brier": 0.18023538918592308,
+      "positive_rate": 0.4943968358602505,
+      "precision": 0.6786666666666666,
+      "recall": 0.7398255813953488
+    }
+  },
+  "system": {
+    "git_commit": "41ee5ee37f67f94c495b899c17a8456560268bee",
+    "machine": "arm64",
+    "mps_available": true,
+    "numpy": "2.5.2",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.13 (main, Aug  7 2026, 02:15:23) [Clang 22.1.3 ]",
+    "torch": "2.13.0"
+  },
+  "thresholds": {
+    "risk_gate": {
+      "0.1": 0.9555632472038269,
+      "0.25": 0.8755004405975342,
+      "0.5": 0.7226037979125977,
+      "0.75": 0.3323010206222534
+    },
+    "uncertainty_gate": {
+      "0.1": 0.17190200090408325,
+      "0.25": 0.09279078245162964,
+      "0.5": 0.023221634328365326,
+      "0.75": 0.0031881877221167088
+    },
+    "value_gate": {
+      "0.1": 0.9722502827644348,
+      "0.25": 0.9468547105789185,
+      "0.5": 0.7899459600448608,
+      "0.75": 0.46232473850250244
+    }
+  },
+  "value_training": {
+    "cached": true,
+    "checkpoint": "artifacts/runs/value-v1/checkpoints/value_gate.pt",
+    "helpful_count": 624,
+    "sample_count": 1505,
+    "train_config": {
+      "batch_size": 512,
+      "device": "auto",
+      "epochs": 60,
+      "hidden_dims": [
+        128,
+        128
+      ],
+      "learning_rate": 0.0003,
+      "seed": 27,
+      "weight_decay": 1e-06
+    },
+    "validation_episodes": [
+      0,
+      4,
+      18,
+      22,
+      32,
+      33,
+      39,
+      40,
+      45,
+      48,
+      59,
+      60,
+      64,
+      65,
+      66,
+      68,
+      69,
+      77,
+      84,
+      86,
+      93,
+      96,
+      99,
+      100,
+      101,
+      104,
+      105,
+      112,
+      115,
+      127,
+      128,
+      144,
+      154,
+      156,
+      161,
+      165,
+      166,
+      173,
+      184,
+      185,
+      187,
+      188,
+      195,
+      214,
+      216,
+      223,
+      224,
+      233
+    ],
+    "validation_metrics": {
+      "auroc": 0.821529131470652,
+      "average_precision": 0.7630621196478076,
+      "brier": 0.18249856517154664,
+      "positive_rate": 0.5,
+      "precision": 0.673202614379085,
+      "recall": 0.762962962962963
+    }
+  }
+}

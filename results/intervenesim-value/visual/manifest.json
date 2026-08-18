@@ -1,0 +1,74 @@
+{
+  "config": {
+    "cameras": [
+      "frontview",
+      "agentview"
+    ],
+    "candidate_steps": [
+      10,
+      30,
+      50,
+      70,
+      90,
+      110,
+      130
+    ],
+    "device": "auto",
+    "disturbances": [
+      "nominal",
+      "object_shift",
+      "action_noise",
+      "action_delay",
+      "gripper_slip"
+    ],
+    "episodes_per_task": 2,
+    "epochs": 30,
+    "eval_policy_seed": 327,
+    "max_steps": 260,
+    "output_dir": "artifacts/runs/visual-v1",
+    "research_run": "artifacts/runs/research-v1",
+    "seed": 117,
+    "tasks": [
+      "can",
+      "milk",
+      "bread",
+      "cereal"
+    ],
+    "train_policy_seed": 27
+  },
+  "elapsed_seconds": 1.9605720043182373,
+  "eval_samples": 512,
+  "montage": "artifacts/runs/visual-v1/results/visual_camera_montage.png",
+  "probe": {
+    "checkpoint": "artifacts/runs/visual-v1/results/visual_value_probe.pt",
+    "metrics": {
+      "agentview": {
+        "auroc": 0.6961336336336337,
+        "average_precision": 0.5856027748754277,
+        "brier": 0.26368175974403785,
+        "positive_rate": 0.01171875,
+        "precision": 0.6666666666666666,
+        "recall": 0.018518518518518517
+      },
+      "frontview": {
+        "auroc": 0.7123373373373373,
+        "average_precision": 0.5815947738011614,
+        "brier": 0.21801447652297556,
+        "positive_rate": 0.59375,
+        "precision": 0.5723684210526315,
+        "recall": 0.8055555555555556
+      }
+    }
+  },
+  "report": "artifacts/runs/visual-v1/results/report.md",
+  "system": {
+    "git_commit": "41ee5ee37f67f94c495b899c17a8456560268bee",
+    "machine": "arm64",
+    "mps_available": true,
+    "numpy": "2.5.2",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.13 (main, Aug  7 2026, 02:15:23) [Clang 22.1.3 ]",
+    "torch": "2.13.0"
+  },
+  "train_samples": 498
+}

@@ -4,6 +4,7 @@ import contextlib
 import io
 import logging
 import os
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,6 +29,25 @@ class TaskState:
     object_geometry: np.ndarray
     place_eef_z: float
     grasp_offset_z: float
+
+
+@dataclass(frozen=True)
+class EnvSnapshot:
+    """Complete deterministic state required to fork a rollout."""
+
+    sim_state: np.ndarray
+    control: np.ndarray
+    mocap_pos: np.ndarray
+    mocap_quat: np.ndarray
+    step: int
+    env_timestep: int
+    env_cur_time: float
+    env_done: bool
+    rest_object_z: float
+    rng_state: dict[str, Any]
+    controller_state: dict[str, dict[str, np.ndarray]]
+    observable_state: dict[str, dict[str, Any]]
+    last_raw: dict[str, Any]
 
 
 class PickPlaceEnv:
@@ -250,6 +270,79 @@ class PickPlaceEnv:
         self._env.sim.data.set_joint_qvel(joint_name, np.zeros(6, dtype=np.float64))
         self._env.sim.forward()
         self._refresh_observation()
+
+    def snapshot(self) -> EnvSnapshot:
+        """Capture simulator and controller state for a deterministic counterfactual fork."""
+        controller_state: dict[str, dict[str, np.ndarray]] = {}
+        controllers = self._env.robots[0].composite_controller.part_controllers
+        for name, controller in controllers.items():
+            values: dict[str, np.ndarray] = {}
+            for attribute in (
+                "goal_pos",
+                "goal_ori",
+                "goal_qvel",
+                "relative_ori",
+                "origin_pos",
+                "origin_ori",
+            ):
+                value = getattr(controller, attribute, None)
+                if isinstance(value, np.ndarray):
+                    values[attribute] = value.copy()
+            controller_state[name] = values
+        observable_state: dict[str, dict[str, Any]] = {}
+        for name, observable in self._env._observables.items():
+            observable_state[name] = {
+                attribute: deepcopy(getattr(observable, attribute))
+                for attribute in (
+                    "_time_since_last_sample",
+                    "_current_delay",
+                    "_current_observed_value",
+                    "_sampled",
+                )
+            }
+        return EnvSnapshot(
+            sim_state=np.asarray(self._env.sim.get_state().flatten(), dtype=np.float64).copy(),
+            control=np.asarray(self._env.sim.data.ctrl, dtype=np.float64).copy(),
+            mocap_pos=np.asarray(self._env.sim.data.mocap_pos, dtype=np.float64).copy(),
+            mocap_quat=np.asarray(self._env.sim.data.mocap_quat, dtype=np.float64).copy(),
+            step=self._step,
+            env_timestep=int(self._env.timestep),
+            env_cur_time=float(self._env.cur_time),
+            env_done=bool(self._env.done),
+            rest_object_z=self._rest_object_z,
+            rng_state=deepcopy(self._rng.bit_generator.state),
+            controller_state=controller_state,
+            observable_state=observable_state,
+            last_raw=deepcopy(self._last_raw or {}),
+        )
+
+    def restore(self, snapshot: EnvSnapshot) -> TaskState:
+        """Restore a snapshot and refresh all public observations."""
+        self._env.sim.set_state_from_flattened(snapshot.sim_state.copy())
+        self._env.sim.data.ctrl[:] = snapshot.control
+        if snapshot.mocap_pos.size:
+            self._env.sim.data.mocap_pos[:] = snapshot.mocap_pos
+        if snapshot.mocap_quat.size:
+            self._env.sim.data.mocap_quat[:] = snapshot.mocap_quat
+        self._env.sim.forward()
+        controllers = self._env.robots[0].composite_controller.part_controllers
+        for name, values in snapshot.controller_state.items():
+            controller = controllers[name]
+            for attribute, value in values.items():
+                setattr(controller, attribute, value.copy())
+            controller.update(force=True)
+        self._step = snapshot.step
+        self._env.timestep = snapshot.env_timestep
+        self._env.cur_time = snapshot.env_cur_time
+        self._env.done = snapshot.env_done
+        self._rest_object_z = snapshot.rest_object_z
+        self._rng.bit_generator.state = deepcopy(snapshot.rng_state)
+        for name, values in snapshot.observable_state.items():
+            observable = self._env._observables[name]
+            for attribute, value in values.items():
+                setattr(observable, attribute, deepcopy(value))
+        self._last_raw = deepcopy(snapshot.last_raw)
+        return self.task_state()
 
     def _refresh_observation(self) -> None:
         # The observable cache is updated inside _get_observations.

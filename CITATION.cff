@@ -1,20 +1,22 @@
 cff-version: 1.2.0
-message: "If you use InterveneSim-X, please cite this software and technical report."
-title: "InterveneSim-X: What Should a Robot Learn From a Correction?"
+message: "If you use InterveneSim-Value, please cite this software and technical report."
+title: "InterveneSim-Value: Will Help Change the Outcome?"
 type: software
 authors:
   - family-names: Villalovoz
     given-names: Ethan
 repository-code: "https://github.com/ethanvillalovoz/intervenesim"
 license: Apache-2.0
-version: 0.2.0
-date-released: 2026-08-12
+version: 0.3.0
+date-released: 2026-08-13
 abstract: >-
-  A reproducible, equal-label-budget study of corrective interventions, rejected actions,
-  and learned help seeking across four simulated manipulation domains.
+  A reproducible causal benchmark that uses exact simulator forks to learn whether expert
+  takeover changes outcomes across four simulated manipulation domains.
 keywords:
   - imitation learning
   - interactive imitation learning
   - robot learning
   - corrective interventions
+  - causal inference
+  - learning to defer
   - simulation

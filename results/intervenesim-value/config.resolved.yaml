@@ -1,0 +1,45 @@
+seed: 27
+train_policy_seeds:
+- 27
+- 127
+- 227
+eval_policy_seeds:
+- 327
+- 427
+tasks:
+- can
+- milk
+- bread
+- cereal
+disturbances:
+- nominal
+- object_shift
+- action_noise
+- action_delay
+- gripper_slip
+candidate_steps:
+- 10
+- 30
+- 50
+- 70
+- 90
+- 110
+- 130
+target_budgets:
+- 0.1
+- 0.25
+- 0.5
+- 0.75
+train_episodes: 4
+eval_episodes: 6
+value_epochs: 60
+value_hidden_dims:
+- 128
+- 128
+batch_size: 512
+learning_rate: 0.0003
+weight_decay: 1.0e-06
+max_steps: 260
+device: auto
+research_run: artifacts/runs/research-v1
+output_dir: artifacts/runs/value-v1

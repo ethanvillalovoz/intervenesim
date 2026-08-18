@@ -70,6 +70,10 @@ figcaption { margin-top: 10px; color: var(--muted); font-size: 12px; text-align:
 .help-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 70px; align-items: center; }
 .help-grid h3 { font-size: 40px; line-height: 1.08; letter-spacing: -.04em; }
 
+.visual-section { display: grid; grid-template-columns: .8fr 1.2fr; gap: clamp(42px,8vw,110px); align-items: center; background: var(--paper); }
+.visual-section p { color: var(--muted); font-size: 18px; }
+.centered { justify-content: center; margin-bottom: 0; }
+
 .reproduce { display: grid; grid-template-columns: .8fr 1.2fr; gap: 70px; align-items: center; background: #eef3ff; }
 pre { overflow-x: auto; margin: 0; padding: 30px; border-radius: 14px; color: #dce6ff; background: #10182f; font: 13px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; box-shadow: 0 20px 50px rgba(17,26,51,.15); }
 .boundaries { text-align: center; }
@@ -86,7 +90,7 @@ footer div:last-child { display: flex; gap: 22px; align-items: center; font-size
   .metrics { grid-template-columns: 1fr 1fr; }
   .metrics div:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
   .metrics div:nth-child(4) { border-top: 1px solid var(--line); }
-  .result, .help-grid, .reproduce { grid-template-columns: 1fr; }
+  .result, .help-grid, .reproduce, .visual-section { grid-template-columns: 1fr; }
   .pipeline { grid-template-columns: 1fr; gap: 12px; }
   .arrow { width: auto; height: 24px; transform: rotate(90deg); }
   .finding-grid { grid-template-columns: 1fr; }

@@ -1,99 +1,102 @@
-# InterveneSim-X
+# InterveneSim-Value
 
 [![CI](https://github.com/ethanvillalovoz/intervenesim/actions/workflows/ci.yml/badge.svg)](https://github.com/ethanvillalovoz/intervenesim/actions/workflows/ci.yml)
 [![Python 3.11–3.12](https://img.shields.io/badge/python-3.11–3.12-blue)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Apple Silicon](https://img.shields.io/badge/compute-Apple%20Silicon-black)](docs/reproducibility.md)
 
-**What should a robot learn from a correction?**
+**A robot should not ask “Will I fail?” It should ask “Will help change the outcome?”**
 
-InterveneSim-X is a reproducible simulation study of whether corrective actions gathered
-on a robot's failure distribution teach more than the same number of additional clean
-demonstration labels.
+InterveneSim-Value is a reproducible causal benchmark for learning when expert takeover is
+actually useful. At fixed decision points, it snapshots the complete MuJoCo and controller
+state, then evaluates two futures from that exact state: autonomous continuation and expert
+takeover. The resulting label measures the value of intervention—not merely failure risk.
 
-> **Primary result:** recovery behavior cloning improves disturbed success from **38.6% to
-> 61.4%** against an equal clean-label budget—a **+22.8 percentage-point** gain that is
-> positive for all five independent policy-training seeds.
+> **Primary held-out-policy result:** at approximately one-quarter of episodes helped, the
+> value gate reaches **66.2% success with 23.3% intervention**, versus **60.4% success with
+> 24.6% intervention** for a failure-risk gate. Its helpful-intervention AUROC is **0.817**
+> versus **0.706** for risk.
 
-[Read the technical report](output/pdf/intervenesim-x-report.pdf) ·
+[Read the v0.3 technical report](output/pdf/intervenesim-value-report.pdf) ·
 [Explore the project page](docs/index.html) ·
-[Inspect the frozen results](results/intervenesim-x) ·
-[Read the protocol](docs/intervenesim-x.md)
+[Inspect the frozen v0.3 results](results/intervenesim-value) ·
+[Read the protocol](docs/intervenesim-value.md)
 
-[![Matched baseline failure and recovery-data success](results/intervenesim-x/comparison-preview.png)](results/intervenesim-x/intervenesim-x-cereal-slip.mp4)
+[![Exact counterfactual fork: autonomous failure and expert success](results/intervenesim-value/comparison-preview.png)](results/intervenesim-value/intervenesim-value-fork.mp4)
 
-The image links to a seed-matched MP4: same cereal task, same gripper slip, same evaluation
-seed. The baseline fails; the recovery-trained policy reacquires and places the object.
+Both video panels start at the same saved simulator state on a held-out bread-policy
+gripper-slip episode. The replay is checked against the frozen dataset before encoding:
+autonomous continuation fails; expert takeover succeeds.
 
-## The study at a glance
+## The causal experiment
 
 | Dimension | Design |
 |---|---|
 | Robot and simulator | Panda arm, robosuite PickPlace, MuJoCo |
 | Object domains | can, milk, bread, cereal |
-| Deployment disturbances | object shift, action noise, action delay, gripper slip |
-| Policy-training seeds | 5 independent initializations |
-| Added-label budgets | 500, 1,500, 3,000, 4,800 actions |
-| Primary comparison | recovery corrections vs. equal-count clean labels |
+| Candidate intervention steps | 10, 30, 50, 70, 90, 110, 130 |
+| Counterfactual branches | autonomous continuation vs. scripted expert takeover |
+| Primary policy split | train on seeds 27/127/227; test on unseen seeds 327/427 |
+| Evaluation scale | 1,517 candidate states from 240 held-out-policy episodes |
+| Comparators | failure risk, ensemble uncertainty, never, always, causal oracle |
 | Compute | Apple M4 Pro / MPS; CPU supported; no CUDA required |
 | Cost | free software, no cloud compute, no paid APIs, no robot hardware |
 
-![Success across independent training seeds](results/intervenesim-x/multiseed_success.png)
+![Causal success-intervention frontier](results/intervenesim-value/value_frontier.png)
 
-| Training condition | Disturbed success | Hierarchical 95% CI |
-|---|---:|---:|
-| Baseline | 39.4% ± 5.8% | [33.9, 45.5] |
-| + equal clean labels | 38.6% ± 2.3% | [34.5, 42.8] |
-| **+ recovery labels** | **61.4% ± 3.6%** | **[56.6, 65.9]** |
-| + recovery and contrastive loss | 39.4% ± 7.6% | [32.5, 46.2] |
+| Gate | Target budget | Success | Realized intervention | Useful-request precision |
+|---|---:|---:|---:|---:|
+| **Value** | 25% | **66.2%** | 23.3% | **91.1%** |
+| Failure risk | 25% | 60.4% | 24.6% | 62.7% |
+| Ensemble uncertainty | 25% | 58.3% | 19.2% | 69.6% |
+| **Value** | 50% | **89.6%** | 54.6% | **81.7%** |
+| Failure risk | 50% | 73.8% | 45.8% | 62.7% |
+| Ensemble uncertainty | 50% | 81.7% | 52.1% | 70.4% |
 
-The exact paired sign-permutation value for recovery versus clean is 0.0625. With only five
-training seeds, that is the smallest attainable two-sided value for a same-direction
-effect; the report emphasizes the 5/5 consistency, effect size, and interval instead of a
-binary significance claim.
+`never_help` succeeds on 45.0% of evaluation episodes. `always_help` reaches 98.3% but
+intervenes on every episode. The causal oracle reaches 99.6% while intervening on 54.6%.
+The learned gate exposes the complete tradeoff instead of selecting one flattering point.
 
-## Why this is more than a benchmark score
+## Robustness across policy seeds
 
-The repository implements the whole research loop:
+The predeclared primary experiment uses three training-policy seeds and two unseen test-policy
+seeds. After that audit, a clearly marked exploratory leave-one-policy-seed-out analysis was
+added across all five seeds.
 
-1. Collect multi-domain clean expert demonstrations.
-2. Train a task- and phase-routed behavior-cloned policy.
-3. Create four controlled deployment failure families.
-4. Trigger privileged expert takeover on stalled or disturbed rollouts.
-5. Store both the correction and the robot action rejected at takeover.
-6. Retrain clean-data and correction-data controls at identical action-label budgets.
-7. Repeat across independent policy seeds and matched evaluation seeds.
-8. Train and audit a causal temporal help-request model.
-9. Produce episode records, uncertainty intervals, plots, a paper, and matched video.
+![Five-fold held-out-policy robustness](results/intervenesim-value/crossval_success.png)
 
-The runner is crash-resumable: datasets, checkpoints, and completed condition evaluations
-are cached independently.
+Near the 25% budget, the value gate beats risk by **8.1 ± 4.2 points** and wins on **5/5**
+held-out seeds. Near 50%, it leads risk by **14.7 ± 3.1 points** and uncertainty by
+**7.9 ± 2.8 points**, again winning on 5/5 seeds. Because this analysis followed inspection
+of the primary result, it is evidence of robustness—not a new confirmatory test.
 
-## Honest negative results
+## Vision and genuine human takeover hooks
 
-### More supervision structure can hurt
+The primary benchmark is deliberately state based, but v0.3 adds two bridges toward more
+realistic interaction:
 
-The dataset makes it possible to learn not only *toward* the correction but *away* from
-the action rejected by the expert. A fixed-margin contrastive objective sounds useful; it
-finishes **22.0 points below** ordinary recovery behavior cloning and loses for all five
-training seeds. The rejected action is contextually wrong, not necessarily globally wrong.
+- A frozen ImageNet ResNet-18 probe trained on front-view RGB plus non-object
+  proprioception reaches **0.712 AUROC** on an unseen policy seed. Its ranking transfers to
+  an unseen agent-view camera at **0.696 AUROC**, while its 0.5-threshold recall collapses
+  to **1.9%**. That calibration failure is published, not hidden.
+- `capture-human-corrections` runs policy-first simulation and lets a person press `T` to
+  take over with keyboard Cartesian/gripper control. It stores human actions, timing, and
+  masks in a schema separate from scripted supervision. No human-study claim is made.
 
-### Offline risk ranking is not selective intervention
+![Matched held-out observations from two cameras](results/intervenesim-value/visual/visual_camera_montage.png)
 
-The corrected temporal risk detector reaches **0.919 held-out AUROC**, but its
-validation-selected high-recall threshold asks for help almost everywhere online. The
-complete post-audit operating-point sweep is therefore published:
+## Earlier result: what should a robot learn from correction?
 
-| Risk threshold | Assisted disturbed success | Disturbed episodes helped | Nominal episodes helped |
-|---:|---:|---:|---:|
-| 0.90 | 89.8% | 87.5% | 28.1% |
-| 0.95 | 79.7% | 75.0% | 15.6% |
-| **0.97** | **75.8%** | **64.8%** | **3.1%** |
-| 0.99 | 54.7% | 22.7% | 0.0% |
+InterveneSim-X, the v0.2 study retained in this repository, tested corrective recovery
+labels against the same number of extra clean labels. Recovery behavior cloning improved
+disturbed success from **38.6% to 61.4%**—a **+22.8-point** gain that was positive for all
+five independent training seeds. Its report and frozen artifacts remain available:
 
-The sweep is explicitly exploratory because it followed the deployment calibration audit.
+- [InterveneSim-X technical report](output/pdf/intervenesim-x-report.pdf)
+- [InterveneSim-X frozen results](results/intervenesim-x)
+- [InterveneSim-X protocol](docs/intervenesim-x.md)
 
-## Quick start
+## Reproduce
 
 Install [uv](https://docs.astral.sh/uv/), then:
 
@@ -102,48 +105,54 @@ git clone https://github.com/ethanvillalovoz/intervenesim.git
 cd intervenesim
 uv sync --locked --extra dev
 uv run intervenesim doctor
-uv run intervenesim smoke
+uv run pytest
 ```
 
-Run the expanded benchmark:
+The value experiment consumes the policy checkpoints produced by InterveneSim-X:
 
 ```bash
 uv run intervenesim research --config configs/research.yaml
+uv run intervenesim value-research --config configs/value.yaml
+uv run intervenesim record-value-counterfactual \
+  --run artifacts/runs/value-v1 \
+  --output artifacts/videos/intervenesim-value-fork.mp4
 ```
 
-Record a matched InterveneSim-X comparison from the generated checkpoints:
+The optional RGB pilot downloads free ImageNet weights on first use:
 
 ```bash
-uv run intervenesim record-research-comparison \
-  --run artifacts/runs/research-v1 \
-  --output artifacts/videos/intervenesim-x.mp4 \
-  --task cereal \
-  --disturbance gripper_slip
+uv sync --locked --extra vision
+uv run intervenesim visual-research --config configs/visual.yaml
 ```
 
-The original single-task study remains available through `intervenesim benchmark`; its
-frozen results are under [`results/benchmark-v1`](results/benchmark-v1).
+To collect actual user takeovers in the simulator viewer:
+
+```bash
+uv run intervenesim capture-human-corrections \
+  --checkpoint artifacts/runs/research-v1/checkpoints/seed-27/baseline.pt \
+  --output artifacts/human/corrections.npz
+```
 
 ## Public artifacts
 
-- [Technical report PDF](output/pdf/intervenesim-x-report.pdf)
-- [Paper source](paper/intervenesim-x.md)
-- [Predeclared protocol and post-audit amendments](docs/intervenesim-x.md)
+- [v0.3 technical report PDF](output/pdf/intervenesim-value-report.pdf)
+- [Paper source](paper/intervenesim-value.md)
+- [Predeclared protocol and post-audit amendment](docs/intervenesim-value.md)
 - [Reproducibility guide](docs/reproducibility.md)
 - [Dataset card](docs/dataset-card.md)
 - [Model card](docs/model-card.md)
-- [All autonomous episode records](results/intervenesim-x/autonomous_episodes.csv)
-- [All primary help-seeking episode records](results/intervenesim-x/help_episodes.csv)
-- [All threshold-sweep episode records](results/intervenesim-x/help_threshold_sweep_episodes.csv)
-- [Resolved experiment configuration](results/intervenesim-x/config.resolved.yaml)
-- [Machine-readable manifest](results/intervenesim-x/manifest.json)
+- [Primary gate episode records](results/intervenesim-value/gate_episodes.csv)
+- [Five-fold gate episode records](results/intervenesim-value/crossval_gate_episodes.csv)
+- [Raw counterfactual outcome tables](results/intervenesim-value)
+- [Resolved configurations](results/intervenesim-value/config.resolved.yaml)
+- [Machine-readable manifest](results/intervenesim-value/manifest.json)
 
 ## Scope
 
-This is a state-based simulation experiment with scripted corrections. It is not evidence
-of visual robustness, human intervention quality, robot safety, or sim-to-real transfer.
-After takeover, the scripted expert bypasses synthetic actuator corruption while persistent
-scene changes remain. These constraints define the result rather than hiding behind it.
+The matched counterfactual is exact for this simulator, disturbance process, candidate grid,
+and scripted expert. It does not establish the value of a particular human intervention,
+real-robot safety, or sim-to-real transfer. The visual study is a frozen-encoder diagnostic,
+not a visual control policy. These boundaries define the result.
 
 ## Development
 
@@ -153,4 +162,5 @@ uv run ruff check .
 uv run pytest
 ```
 
-InterveneSim-X is Apache-2.0 licensed. Citation metadata is in [CITATION.cff](CITATION.cff).
+InterveneSim-Value is Apache-2.0 licensed. Citation metadata is in
+[CITATION.cff](CITATION.cff).

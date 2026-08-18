@@ -1,0 +1,13 @@
+seed: 119
+train_policy_seed: 27
+eval_policy_seed: 127
+tasks: [can]
+disturbances: [nominal, gripper_slip]
+candidate_steps: [20, 60]
+cameras: [frontview, agentview]
+episodes_per_task: 1
+epochs: 2
+max_steps: 180
+device: auto
+research_run: artifacts/runs/research-v1
+output_dir: artifacts/runs/visual-smoke

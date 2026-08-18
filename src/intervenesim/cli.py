@@ -10,11 +10,18 @@ import typer
 from rich.console import Console
 
 from intervenesim.benchmark import run_benchmark
-from intervenesim.config import BenchmarkConfig, ResearchConfig
+from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig, VisualConfig
 from intervenesim.environment import PickPlaceEnv
 from intervenesim.expert import ScriptedExpert
+from intervenesim.human import capture_human_corrections
 from intervenesim.research import run_research
-from intervenesim.video import record_benchmark_comparison, record_research_comparison
+from intervenesim.value_research import run_value_research
+from intervenesim.video import (
+    record_benchmark_comparison,
+    record_research_comparison,
+    record_value_counterfactual,
+)
+from intervenesim.visual_research import run_visual_research
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -109,6 +116,18 @@ def record_x_comparison(
     console.print_json(json.dumps(result))
 
 
+@app.command("record-value-counterfactual")
+def record_value_fork(
+    run: Annotated[Path, typer.Option(exists=True, file_okay=False)] = Path(
+        "artifacts/runs/value-v1"
+    ),
+    output: Annotated[Path, typer.Option()] = Path("artifacts/videos/intervenesim-value-fork.mp4"),
+) -> None:
+    """Record matched autonomous and expert futures from an exact simulator fork."""
+    result = record_value_counterfactual(run, output)
+    console.print_json(json.dumps(result))
+
+
 @app.command()
 def research(
     config: Annotated[Path, typer.Option(exists=True, readable=True)] = Path(
@@ -122,6 +141,49 @@ def research(
     resolved = ResearchConfig.from_yaml(config)
     manifest = run_research(resolved, output_dir=output, progress=_progress)
     console.print(f"[bold green]Complete[/bold green]: {manifest['artifacts']['report']}")
+
+
+@app.command("value-research")
+def value_research(
+    config: Annotated[Path, typer.Option(exists=True, readable=True)] = Path("configs/value.yaml"),
+    output: Annotated[
+        Path | None, typer.Option(help="Override the configured output directory.")
+    ] = None,
+) -> None:
+    """Run the counterfactual value-of-intervention benchmark."""
+    resolved = ValueConfig.from_yaml(config)
+    manifest = run_value_research(resolved, output_dir=output, progress=_progress)
+    console.print(f"[bold green]Complete[/bold green]: {manifest['artifacts']['report']}")
+
+
+@app.command("capture-human-corrections")
+def capture_corrections(
+    checkpoint: Annotated[Path, typer.Option(exists=True, readable=True)],
+    output: Annotated[Path, typer.Option()] = Path("artifacts/human/corrections.npz"),
+    task: Annotated[str, typer.Option()] = "can",
+    disturbance: Annotated[str, typer.Option()] = "gripper_slip",
+    episodes: Annotated[int, typer.Option(min=1)] = 5,
+    seed: Annotated[int, typer.Option()] = 27,
+) -> None:
+    """Capture genuine keyboard takeovers while a policy runs in simulation."""
+    data = capture_human_corrections(checkpoint, output, task, disturbance, episodes, seed)
+    console.print(
+        f"[bold green]Saved[/bold green] {int(data.human_control.sum())} human-controlled "
+        f"actions to {output}"
+    )
+
+
+@app.command("visual-research")
+def visual_research(
+    config: Annotated[Path, typer.Option(exists=True, readable=True)] = Path("configs/visual.yaml"),
+    output: Annotated[
+        Path | None, typer.Option(help="Override the configured output directory.")
+    ] = None,
+) -> None:
+    """Run the frozen-encoder visual intervention-value pilot."""
+    resolved = VisualConfig.from_yaml(config)
+    manifest = run_visual_research(resolved, output_dir=output, progress=_progress)
+    console.print(f"[bold green]Complete[/bold green]: {manifest['report']}")
 
 
 def _progress(message: str) -> None:
