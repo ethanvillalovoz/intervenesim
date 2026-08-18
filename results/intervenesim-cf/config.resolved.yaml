@@ -1,0 +1,63 @@
+seed: 27
+logging_seeds:
+- 101
+- 211
+- 307
+- 401
+- 503
+logging_schemes:
+- randomized
+- uncertainty_selective
+- adaptive_value
+estimators:
+- s_learner
+- t_learner
+- ipw_learner
+- dr_learner
+- reversibility_proxy
+target_budgets:
+- 0.1
+- 0.25
+- 0.5
+- 0.75
+intervention_costs:
+- 0.05
+- 0.1
+- 0.25
+- 0.5
+latency_candidate_hops:
+- 0
+- 1
+- 2
+learning_curve_episodes:
+- 60
+- 120
+- 180
+- 240
+ood_axes:
+- task
+- disturbance
+ood_logging_seeds:
+- 101
+- 211
+- 307
+ood_estimators:
+- dr_learner
+- reversibility_proxy
+assist_rate: 0.5
+positivity_floor: 0.1
+adaptive_update_interval: 60
+adaptive_temperature: 0.15
+adaptive_epochs: 20
+epochs: 60
+hidden_dims:
+- 64
+- 64
+batch_size: 128
+learning_rate: 0.0005
+weight_decay: 1.0e-05
+crossfit_folds: 3
+device: auto
+source_run: artifacts/runs/value-v1
+risk_checkpoint: artifacts/runs/research-v1/checkpoints/risk_gate.pt
+output_dir: results/intervenesim-cf

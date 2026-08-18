@@ -1,0 +1,114 @@
+{
+  "artifacts": {
+    "counterfactual_metrics": "results/intervenesim-cf/counterfactual_metrics.csv",
+    "gate_aggregate": "results/intervenesim-cf/gate_aggregate.csv",
+    "latency_audit": "results/intervenesim-cf/latency_aggregate.csv",
+    "learning_curves": "results/intervenesim-cf/learning_curves.csv",
+    "open_world": "results/intervenesim-cf/open_world.csv",
+    "paired_differences": "results/intervenesim-cf/paired_seed_differences.csv",
+    "report": "results/intervenesim-cf/report.md"
+  },
+  "config": {
+    "adaptive_epochs": 20,
+    "adaptive_temperature": 0.15,
+    "adaptive_update_interval": 60,
+    "assist_rate": 0.5,
+    "batch_size": 128,
+    "crossfit_folds": 3,
+    "device": "auto",
+    "epochs": 60,
+    "estimators": [
+      "s_learner",
+      "t_learner",
+      "ipw_learner",
+      "dr_learner",
+      "reversibility_proxy"
+    ],
+    "hidden_dims": [
+      64,
+      64
+    ],
+    "intervention_costs": [
+      0.05,
+      0.1,
+      0.25,
+      0.5
+    ],
+    "latency_candidate_hops": [
+      0,
+      1,
+      2
+    ],
+    "learning_curve_episodes": [
+      60,
+      120,
+      180,
+      240
+    ],
+    "learning_rate": 0.0005,
+    "logging_schemes": [
+      "randomized",
+      "uncertainty_selective",
+      "adaptive_value"
+    ],
+    "logging_seeds": [
+      101,
+      211,
+      307,
+      401,
+      503
+    ],
+    "ood_axes": [
+      "task",
+      "disturbance"
+    ],
+    "ood_estimators": [
+      "dr_learner",
+      "reversibility_proxy"
+    ],
+    "ood_logging_seeds": [
+      101,
+      211,
+      307
+    ],
+    "output_dir": "results/intervenesim-cf",
+    "positivity_floor": 0.1,
+    "risk_checkpoint": "artifacts/runs/research-v1/checkpoints/risk_gate.pt",
+    "seed": 27,
+    "source_run": "artifacts/runs/value-v1",
+    "target_budgets": [
+      0.1,
+      0.25,
+      0.5,
+      0.75
+    ],
+    "weight_decay": 1e-05
+  },
+  "elapsed_seconds": 159.3955090045929,
+  "leakage_audit": {
+    "files_checked": 15,
+    "forbidden_fields": [
+      "assisted_success",
+      "autonomous_success",
+      "helpful",
+      "signed_value"
+    ],
+    "passed": true,
+    "violations": {}
+  },
+  "source": {
+    "evaluation_candidates": 1517,
+    "evaluation_episodes": 240,
+    "train_candidates": 1505,
+    "train_episodes": 240
+  },
+  "system": {
+    "git_commit": "unknown",
+    "machine": "arm64",
+    "mps_available": true,
+    "numpy": "2.5.2",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.13 (main, Aug  7 2026, 02:15:23) [Clang 22.1.3 ]",
+    "torch": "2.13.0"
+  }
+}
