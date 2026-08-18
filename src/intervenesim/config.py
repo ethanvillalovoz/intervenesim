@@ -226,3 +226,84 @@ class VisualConfig:
         for key in ("tasks", "disturbances", "candidate_steps", "cameras"):
             data[key] = list(data[key])
         return data
+
+
+@dataclass(frozen=True)
+class SelectiveConfig:
+    """Protocol for learning intervention value from selectively observed outcomes."""
+
+    seed: int = 27
+    logging_seeds: tuple[int, ...] = (101, 211, 307, 401, 503)
+    logging_schemes: tuple[str, ...] = (
+        "randomized",
+        "uncertainty_selective",
+        "adaptive_value",
+    )
+    estimators: tuple[str, ...] = (
+        "s_learner",
+        "t_learner",
+        "ipw_learner",
+        "dr_learner",
+        "reversibility_proxy",
+    )
+    target_budgets: tuple[float, ...] = (0.10, 0.25, 0.50, 0.75)
+    intervention_costs: tuple[float, ...] = (0.05, 0.10, 0.25, 0.50)
+    latency_candidate_hops: tuple[int, ...] = (0, 1, 2)
+    learning_curve_episodes: tuple[int, ...] = (60, 120, 180, 240)
+    ood_axes: tuple[str, ...] = ("task", "disturbance")
+    ood_logging_seeds: tuple[int, ...] = (101, 211, 307)
+    ood_estimators: tuple[str, ...] = ("dr_learner", "reversibility_proxy")
+    assist_rate: float = 0.5
+    positivity_floor: float = 0.1
+    adaptive_update_interval: int = 60
+    adaptive_temperature: float = 0.15
+    adaptive_epochs: int = 20
+    epochs: int = 60
+    hidden_dims: tuple[int, ...] = (64, 64)
+    batch_size: int = 128
+    learning_rate: float = 5e-4
+    weight_decay: float = 1e-5
+    crossfit_folds: int = 3
+    device: str = "auto"
+    source_run: str = "artifacts/runs/value-v1"
+    risk_checkpoint: str = "artifacts/runs/research-v1/checkpoints/risk_gate.pt"
+    output_dir: str = "results/intervenesim-cf"
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> SelectiveConfig:
+        with Path(path).open(encoding="utf-8") as handle:
+            raw: dict[str, Any] = yaml.safe_load(handle) or {}
+        for key in (
+            "logging_seeds",
+            "logging_schemes",
+            "estimators",
+            "target_budgets",
+            "intervention_costs",
+            "latency_candidate_hops",
+            "learning_curve_episodes",
+            "ood_axes",
+            "ood_logging_seeds",
+            "ood_estimators",
+            "hidden_dims",
+        ):
+            if key in raw:
+                raw[key] = tuple(raw[key])
+        return cls(**raw)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        for key in (
+            "logging_seeds",
+            "logging_schemes",
+            "estimators",
+            "target_budgets",
+            "intervention_costs",
+            "latency_candidate_hops",
+            "learning_curve_episodes",
+            "ood_axes",
+            "ood_logging_seeds",
+            "ood_estimators",
+            "hidden_dims",
+        ):
+            data[key] = list(data[key])
+        return data

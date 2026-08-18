@@ -1,4 +1,10 @@
-from intervenesim.config import BenchmarkConfig, ResearchConfig, ValueConfig, VisualConfig
+from intervenesim.config import (
+    BenchmarkConfig,
+    ResearchConfig,
+    SelectiveConfig,
+    ValueConfig,
+    VisualConfig,
+)
 
 
 def test_config_loads_sequences_as_tuples() -> None:
@@ -31,3 +37,13 @@ def test_visual_config_loads_camera_transfer_protocol() -> None:
     assert config.cameras == ("frontview", "agentview")
     assert config.train_policy_seed == 27
     assert config.eval_policy_seed == 127
+
+
+def test_selective_config_loads_single_world_protocol() -> None:
+    config = SelectiveConfig.from_yaml("configs/selective-smoke.yaml")
+    assert config.logging_seeds == (13,)
+    assert config.logging_schemes == ("randomized",)
+    assert config.estimators == ("s_learner", "dr_learner", "reversibility_proxy")
+    assert config.ood_axes == ("task",)
+    assert config.intervention_costs == (0.1, 0.25)
+    assert config.latency_candidate_hops == (0, 1)

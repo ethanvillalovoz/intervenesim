@@ -1,0 +1,26 @@
+seed: 7
+logging_seeds: [13]
+logging_schemes: [randomized]
+estimators: [s_learner, dr_learner, reversibility_proxy]
+target_budgets: [0.25, 0.50]
+intervention_costs: [0.10, 0.25]
+latency_candidate_hops: [0, 1]
+learning_curve_episodes: [12]
+ood_axes: [task]
+ood_logging_seeds: [13]
+ood_estimators: [reversibility_proxy]
+assist_rate: 0.50
+positivity_floor: 0.10
+adaptive_update_interval: 12
+adaptive_temperature: 0.20
+adaptive_epochs: 2
+epochs: 2
+hidden_dims: [16]
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.00001
+crossfit_folds: 2
+device: cpu
+source_run: artifacts/runs/value-v1
+risk_checkpoint: artifacts/runs/research-v1/checkpoints/risk_gate.pt
+output_dir: artifacts/runs/selective-smoke
